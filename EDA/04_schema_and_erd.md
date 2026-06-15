@@ -79,6 +79,10 @@ erDiagram
         string  procedure_text
         string  normalized_tag
         double  confidence
+        array   corroborating_terms "cross-field matches"
+        boolean is_reliable
+        string  reliability "Reliable|Uncertain|Unreliable"
+        string  reliability_reason "why reliable/unreliable"
         string  evidence_source_url
     }
     FACILITY_EQUIPMENT {
@@ -86,11 +90,20 @@ erDiagram
         string  equipment_text
         string  normalized_tag
         double  confidence
+        array   corroborating_terms
+        boolean is_reliable
+        string  reliability "Reliable|Uncertain|Unreliable"
+        string  reliability_reason
+        string  evidence_source_url
     }
     FACILITY_CAPABILITY {
         string  facility_id FK
         string  capability_text
         double  confidence
+        array   corroborating_terms
+        boolean is_reliable
+        string  reliability "Reliable|Uncertain|Unreliable"
+        string  reliability_reason
         string  evidence_source_url
     }
     DIM_PINCODE {
@@ -175,5 +188,8 @@ erDiagram
 
 - **Location + need in → ranked out** — `DIM_CARE_NEED → DIM_SPECIALTY → FACILITY_SPECIALTY`, ranked by distance from validated `latitude_clean` / `longitude_clean` (pincode fallback when raw coords fail the India bounding box).
 - **Evidence attached** — each candidate joins `FACILITY_*` claim rows + `FACILITY_SOURCE` URLs for citation of every important claim.
-- **Honest uncertainty** — per-claim `confidence`, facility `evidence_band`, `geo_is_valid`, and `state_mismatch` surface weak/suspicious evidence instead of hiding it.
+- **Honest uncertainty** — nothing is dropped for quality; instead each claim is tagged
+  `is_reliable` / `reliability` (Reliable·Uncertain·Unreliable) with a `reliability_reason`,
+  alongside per-claim `confidence`, facility `evidence_band`, `geo_is_valid`, and
+  `state_mismatch` — weak/suspicious evidence is surfaced, never hidden.
 - **Persistence** — `USER_SCENARIO / SHORTLIST / NOTE / OVERRIDE / REVIEW_DECISION` cover save, revise, and review-decision workflows.
