@@ -23,6 +23,7 @@ src/etl/
     06_gold_reference.py     # dim_specialty / dim_care_need / bridge (inline vocabularies)
     07_gold_serving_views.py # vw_facility_enriched + search_referrals()
     08_gold_user_persistence.py # user_* tables + save/note/override/review helpers (PK/FK)
+    run_all.py               # ▶️ orchestrator — runs 00–08 in one shared session via %run
 ```
 
 > The notebooks are **Databricks source-format `.py` files** (`# Databricks notebook source`,
@@ -41,6 +42,11 @@ same workspace folder so the relative `%run` resolves).
         → 04_gold_dim_facility → 05_gold_evidence → 06_gold_reference
         → 07_gold_serving_views → 08_gold_user_persistence
 ```
+
+**One-click:** open **`run_all.py`** and hit **Run all** to execute the whole chain in a
+*single shared session* — it `%run`s `00–08` in order (so all config/helpers/state are shared)
+and prints a row-count summary across every layer at the end. A failed step stops the chain
+at that cell, so you can see exactly where it broke.
 
 ## Sources
 
