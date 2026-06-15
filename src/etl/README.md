@@ -23,6 +23,7 @@ src/etl/
     06_gold_reference.py     # dim_specialty / dim_care_need / bridge (inline vocabularies)
     07_gold_serving_views.py # vw_facility_enriched + search_referrals()
     08_gold_user_persistence.py # user_* tables + save/note/override/review helpers (PK/FK)
+    09_lakebase_sync.py      # publish curated Gold tables -> Lakebase (serving Postgres)
     run_all.py               # ▶️ orchestrator — runs 00–08 in one shared session via %run
 ```
 
@@ -47,6 +48,24 @@ same workspace folder so the relative `%run` resolves).
 *single shared session* — it `%run`s `00–08` in order (so all config/helpers/state are shared)
 and prints a row-count summary across every layer at the end. A failed step stops the chain
 at that cell, so you can see exactly where it broke.
+
+## Publish to Lakebase (serving DB)
+
+The Databricks App queries **Lakebase** (Neon Postgres) at request time. Run
+**`09_lakebase_sync.py`** *after* the pipeline build to publish the Gold serving tables.
+
+Lakebase **Free Edition is capped at 512 MB**, so the sync is deliberately lean — a blind
+"load every Gold table" fails with `could not extend file because instance size limit
+(512 MB) has been exceeded`. The notebook avoids that by:
+
+- **skipping views** (`vw_facility_enriched` is re-derivable),
+- **auto-dropping every `array<string>` column** (already normalized into the `facility_*`
+  evidence tables — shipping the arrays too is pure duplication), and
+- an optional **`STATE_FILTER`** to publish a single region (the MVP scope) and stay well
+  under the cap.
+
+Credentials come from **Databricks secrets** (`caremap/lakebase_password`), never hardcoded
+— see the notebook header for the one-time `databricks secrets` setup.
 
 ## Sources
 
