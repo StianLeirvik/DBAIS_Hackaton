@@ -22,6 +22,13 @@ table to its layer and Gold reads cross-layer from Silver where needed.
 ## 🥈 Silver — cleaned & conformed
 
 **Facilities**
+
+> **🚧 Validity gate (runs first):** rows whose `unique_id` isn't a UUID — upstream
+> column-shift corruption where markdown / text fragments (`**Ophthalmology**`, `--|--`,
+> `… More`, `**Services:**`) landed in the id column — or that have no name are **quarantined**
+> to `silver_facilities_quarantine` with a reason, not deleted. Deterministic regex, not GenAI:
+> structural corruption is a rules job (free, instant, auditable).
+
 1. **Null normalization** — `"null" | "NA" | "" | "[]"` → real `NULL`.
 2. **Parse JSON arrays** → `array<string>` for phones, websites, sources, specialties, procedure, equipment, capability; **dedup** elements.
 3. **Type casts** — `yearEstablished`→int (1850–2026), `capacity`/`numberDoctors`→int, lat/long→double, metrics→int, dates→date.
@@ -31,10 +38,14 @@ table to its layer and Gold reads cross-layer from Silver where needed.
 7. **Strip NUL bytes** — remove `\u0000` from every string / `array<string>` field (`sanitize_strings`) so Silver and the Gold tables it feeds can sync to **Lakebase** (Postgres rejects `\u0000` in `text` columns and fails the whole row). Applied to `dim_pincode` and `dim_district_health` too; the one Gold table that reads Bronze directly (`facility_specialty`) strips its key inline.
 
 **Pincode reference** → `dim_pincode`
-- Drop `NA` coords, cast lat/long to double.
-- Aggregate to **one row per pincode** (centroid = avg of valid office coords, `office_count`).
+- **Validity gate** → quarantine post-office rows with a non-6-digit pincode or missing /
+  out-of-India coordinates to `dim_pincode_quarantine` (previously a silent `.filter` drop).
+- Cast lat/long to double; aggregate to **one row per pincode** (centroid = avg of valid
+  office coords, `office_count`).
 
 **NFHS reference** → `dim_district_health`
+- **Validity gate** → quarantine rows missing the `district_name | state_ut` join key to
+  `dim_district_health_quarantine`.
 - Strip `()` small-sample markers; map `*` → NULL + `is_suppressed`.
 - Cast indicators to double; normalize `district_name` / `state_ut`.
 
@@ -43,6 +54,22 @@ table to its layer and Gold reads cross-layer from Silver where needed.
 | `silver_facilities` | 1 cleaned facility |
 | `dim_pincode` | 1 pincode |
 | `dim_district_health` | 1 district |
+| `*_quarantine` | rejected rows + `quarantine_reason` (one per cleaned table, audit) |
+
+### Validity gate (reusable across tables)
+
+Two shared helpers in `00_setup` let **any** table adopt the same *flag-don't-drop* pattern,
+so this generalizes beyond facilities:
+
+- `first_failure((bad_cond, "reason"), …)` → builds a `quarantine_reason` column (first
+  matching rule wins; `NULL` = clean).
+- `quarantine_split(df, name)` → writes the rejects to `{name}_quarantine` (audit) and
+  returns the clean rows.
+
+Each table just declares its own bad-row rules (UUID shape, valid pincode, present join key).
+Deterministic checks stay **rules**; **GenAI is reserved for *semantic* checks** on the clean
+survivors (e.g. “does the description actually support the claimed procedure?”) — never for
+structural corruption a regex catches perfectly.
 
 ## 🥇 Gold — serving / business
 

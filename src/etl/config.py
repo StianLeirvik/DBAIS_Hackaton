@@ -54,6 +54,11 @@ T_CARE_NEED = f"{SCHEMA_FQN}.dim_care_need"
 T_BRIDGE = f"{SCHEMA_FQN}.bridge_care_need_specialty"
 VW_ENRICHED = f"{SCHEMA_FQN}.vw_facility_enriched"
 
+# ----- Quarantine / audit tables (rejected rows + quarantine_reason; not served to the app) -----
+T_FACILITIES_QUARANTINE = f"{SILVER_SCHEMA_FQN}.silver_facilities_quarantine"
+T_PINCODE_QUARANTINE = f"{SILVER_SCHEMA_FQN}.dim_pincode_quarantine"
+T_DISTRICT_HEALTH_QUARANTINE = f"{SILVER_SCHEMA_FQN}.dim_district_health_quarantine"
+
 # ----- User persistence tables -----
 T_USER_SCENARIO = f"{SCHEMA_FQN}.user_scenario"
 T_USER_SHORTLIST = f"{SCHEMA_FQN}.user_shortlist"

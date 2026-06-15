@@ -58,6 +58,25 @@ f = (f.withColumn('year_established', F.when(F.col('year_established').between(Y
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Validity gate — quarantine non-facility rows
+# MAGIC Some `unique_id` values are upstream column-shift corruption: markdown / text fragments
+# MAGIC (`**Ophthalmology**`, `--|--`, `… More`, `**Services:**`) landed in the id column, so the
+# MAGIC row is not a facility at all. A real id is a UUID — a deterministic regex separates them
+# MAGIC perfectly (no GenAI needed). Rejects are **quarantined with a reason**, never deleted.
+
+# COMMAND ----------
+
+f = f.withColumn('quarantine_reason', first_failure(
+    (~F.coalesce(F.col('facility_id'), F.lit('')).rlike(UUID_RE),
+        'corrupted unique_id (not a UUID — upstream column shift)'),
+    (F.col('name_clean').isNull() | (F.trim(F.col('name_clean')) == ''),
+        'missing facility name'),
+))
+f = quarantine_split(f, 'silver_facilities', SILVER_SCHEMA_FQN)
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## Validate geography (India bbox + pincode fallback)
 
 # COMMAND ----------
@@ -102,7 +121,9 @@ add_pk('silver_facilities', 'facility_id', SILVER_SCHEMA_FQN, rely=True)
 
 # quick data-quality read-out
 s = spark.table(f'{SILVER_SCHEMA_FQN}.silver_facilities')
-print('rows:', s.count())
+q = spark.table(f'{SILVER_SCHEMA_FQN}.silver_facilities_quarantine')
+print('clean rows:', s.count(), '| quarantined:', q.count())
+q.groupBy('quarantine_reason').count().orderBy(F.desc('count')).show(truncate=False)
 s.groupBy('geo_source').count().show()
 s.select(F.round(F.avg(F.col('geo_is_valid').cast('int')), 3).alias('pct_geo_valid'),
          F.round(F.avg(F.col('state_mismatch').cast('int')), 3).alias('pct_state_mismatch')).show()

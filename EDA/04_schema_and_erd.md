@@ -10,6 +10,7 @@ Gold-layer star schema for the Referral Copilot, plus user-persistence tables.
 | **Core** | `dim_facility`, `facility_source` (citations), `facility_contact` |
 | **Evidence (claims to verify)** | `facility_specialty`, `facility_procedure`, `facility_equipment`, `facility_capability` |
 | **User persistence** | `user_scenario`, `user_shortlist`, `user_shortlist_item`, `user_note`, `user_override`, `user_review_decision` |
+| **Quality / audit** | `silver_facilities_quarantine`, `dim_pincode_quarantine`, `dim_district_health_quarantine` (rejected rows + `quarantine_reason`) |
 
 ## Mermaid ERD
 

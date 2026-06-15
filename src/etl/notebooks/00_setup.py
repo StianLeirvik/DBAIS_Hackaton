@@ -142,6 +142,34 @@ def write_table(df, name, schema_fqn=None, mode='overwrite'):
         .option('overwriteSchema', 'true')
         .saveAsTable(f'{target}.{name}'))
 
+# ----- Validity gate / quarantine (flag + isolate corrupt rows, never silently drop) -----
+# A reusable pattern ANY layer can adopt: declare per-table 'bad row' rules, then split the
+# rejects into a {name}_quarantine audit table while clean rows flow on to Gold/Lakebase.
+# Structural corruption (bad ids, out-of-range coords, missing keys) is a *rules* job:
+# deterministic, free, auditable. GenAI is reserved for *semantic* checks on the survivors.
+UUID_RE = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+
+def first_failure(*checks):
+    '''Build a `quarantine_reason` column from ordered (bad_condition, reason) pairs.
+    Returns the FIRST matching reason (so order = priority), or NULL when the row is clean.'''
+    expr = F.lit(None).cast('string')
+    for cond, reason in reversed(checks):
+        expr = F.when(cond, F.lit(reason)).otherwise(expr)
+    return expr
+
+def quarantine_split(df, name, schema_fqn=None, reason_col='quarantine_reason'):
+    '''Split `df` on `reason_col`: rows with a non-null reason are written to
+    `{schema_fqn}.{name}_quarantine` (kept for audit — reversible, never dropped); clean rows
+    are returned with `reason_col` removed. The quarantine table is always (re)created, even
+    when empty, so its schema stays stable across runs.'''
+    target = schema_fqn or SILVER_SCHEMA_FQN
+    bad = df.filter(F.col(reason_col).isNotNull())
+    good = df.filter(F.col(reason_col).isNull()).drop(reason_col)
+    n_bad = bad.count()
+    write_table(bad, f'{name}_quarantine', target)
+    print(f'  quarantined {n_bad} row(s) -> {target}.{name}_quarantine')
+    return good
+
 # ----- Reliability tagging helpers -----
 _STOPWORDS = ['provides', 'provide', 'provided', 'offers', 'offer', 'offered', 'available',
               'services', 'service', 'patient', 'patients', 'treatment', 'treatments',

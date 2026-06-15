@@ -29,9 +29,15 @@ pin = (bp
        .withColumn('lat', to_double(F.col('latitude')))
        .withColumn('lon', to_double(F.col('longitude')))
        .withColumn('district', norm_text(F.col('district')))
-       .withColumn('state', norm_text(F.col('statename')))
-       .filter((F.col('pincode') != '') & F.col('lat').isNotNull() & F.col('lon').isNotNull())
-       .filter(is_valid_india_coord(F.col('lat'), F.col('lon'))))
+       .withColumn('state', norm_text(F.col('statename'))))
+
+# Validity gate (was a silent .filter — now auditable): quarantine unusable post-office rows.
+pin = pin.withColumn('quarantine_reason', first_failure(
+    (F.col('pincode') == '', 'invalid pincode (not 6 digits)'),
+    (F.col('lat').isNull() | F.col('lon').isNull(), 'missing coordinates'),
+    (~is_valid_india_coord(F.col('lat'), F.col('lon')), 'coordinates outside India bounding box'),
+))
+pin = quarantine_split(pin, 'dim_pincode', SILVER_SCHEMA_FQN)
 
 dim_pincode = (pin.groupBy('pincode')
                .agg(F.round(F.avg('lat'), 6).alias('centroid_lat'),
@@ -82,6 +88,12 @@ for c in indicators.values():
     cond = F.col(c).isNull()
     suppressed = cond if suppressed is None else (suppressed | cond)
 dim_health = dim_health.withColumn('has_suppressed_values', suppressed)
+# Validity gate: the PK is district_name|state_ut, so a row missing either key is unusable.
+dim_health = dim_health.withColumn('quarantine_reason', first_failure(
+    (F.col('district_name').isNull() | (F.col('district_name') == ''), 'missing district name'),
+    (F.col('state_ut').isNull() | (F.col('state_ut') == ''), 'missing state/UT'),
+))
+dim_health = quarantine_split(dim_health, 'dim_district_health', SILVER_SCHEMA_FQN)
 dim_health = sanitize_strings(dim_health)   # strip NUL bytes -> Lakebase-safe
 write_table(dim_health, 'dim_district_health', SILVER_SCHEMA_FQN)
 add_pk('dim_district_health', 'district_state_key', SILVER_SCHEMA_FQN, rely=True)
