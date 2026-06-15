@@ -28,6 +28,7 @@ table to its layer and Gold reads cross-layer from Silver where needed.
 4. **Geo validation** — keep lat∈[6,38], long∈[68,98]; else fall back to `dim_pincode` centroid; set `geo_is_valid`, `geo_source`.
 5. **Standardize geography** — trim/upper-case city & state, validate 6-digit pincode against `dim_pincode`, flag `state_mismatch`.
 6. **Specialty normalization** — map raw codes to controlled `dim_specialty` (`generalMedicine→internalMedicine`, `ent→otolaryngology`, `dental→dentistry`, …).
+7. **Strip NUL bytes** — remove `\u0000` from every string / `array<string>` field (`sanitize_strings`) so Silver and the Gold tables it feeds can sync to **Lakebase** (Postgres rejects `\u0000` in `text` columns and fails the whole row). Applied to `dim_pincode` and `dim_district_health` too; the one Gold table that reads Bronze directly (`facility_specialty`) strips its key inline.
 
 **Pincode reference** → `dim_pincode`
 - Drop `NA` coords, cast lat/long to double.

@@ -39,6 +39,7 @@ dim_pincode = (pin.groupBy('pincode')
                     F.first('district', ignorenulls=True).alias('district'),
                     F.first('state', ignorenulls=True).alias('state'),
                     F.count('*').alias('office_count')))
+dim_pincode = sanitize_strings(dim_pincode)   # strip NUL bytes -> Lakebase-safe
 write_table(dim_pincode, 'dim_pincode', SILVER_SCHEMA_FQN)
 add_pk('dim_pincode', 'pincode', SILVER_SCHEMA_FQN, rely=True)
 
@@ -81,5 +82,6 @@ for c in indicators.values():
     cond = F.col(c).isNull()
     suppressed = cond if suppressed is None else (suppressed | cond)
 dim_health = dim_health.withColumn('has_suppressed_values', suppressed)
+dim_health = sanitize_strings(dim_health)   # strip NUL bytes -> Lakebase-safe
 write_table(dim_health, 'dim_district_health', SILVER_SCHEMA_FQN)
 add_pk('dim_district_health', 'district_state_key', SILVER_SCHEMA_FQN, rely=True)

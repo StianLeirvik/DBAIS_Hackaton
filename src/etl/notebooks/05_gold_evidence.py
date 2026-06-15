@@ -96,7 +96,8 @@ raw_spec = (bron.join(member_map, 'unique_id', 'inner')
             .withColumn('code', F.explode(F.from_json(F.col('specialties'), ArrayType(StringType()))))
             .filter(F.col('code').isNotNull() & (F.trim(F.col('code')) != '')))
 
-fac_spec = (raw_spec.groupBy('facility_id', F.lower(F.trim(F.col('code'))).alias('specialty_code'))
+# specialty_code is sourced from raw Bronze (bypasses Silver), so strip NUL bytes here too.
+fac_spec = (raw_spec.groupBy('facility_id', F.lower(F.trim(strip_null_bytes(F.col('code')))).alias('specialty_code'))
             .agg(F.count('*').alias('mention_count'))
             .join(conf.select('facility_id', 'confidence'), 'facility_id', 'left'))
 write_table(fac_spec, 'facility_specialty')

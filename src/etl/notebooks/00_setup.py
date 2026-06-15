@@ -115,6 +115,25 @@ def norm_text(c):
     '''Trim + upper-case for join keys.'''
     return F.upper(F.trim(c))
 
+def strip_null_bytes(c):
+    '''Remove NUL bytes (U+0000) from a string column. Postgres — and therefore Lakebase —
+    text columns cannot store \\u0000 and reject the whole row on sync, so we strip them in
+    Silver. NULLs and all other characters are preserved.'''
+    return F.regexp_replace(c.cast('string'), r'\x00', '')
+
+def sanitize_strings(df):
+    '''Strip NUL bytes from every string and array<string> column of `df`, making the table
+    safe to publish to Lakebase. Call this just before writing each Silver table; the Gold
+    layer inherits the cleaned values. Non-string columns are left untouched.'''
+    out = df
+    for field in df.schema.fields:
+        dt = field.dataType
+        if isinstance(dt, StringType):
+            out = out.withColumn(field.name, strip_null_bytes(F.col(field.name)))
+        elif isinstance(dt, ArrayType) and isinstance(dt.elementType, StringType):
+            out = out.withColumn(field.name, F.transform(F.col(field.name), strip_null_bytes))
+    return out
+
 def write_table(df, name, schema_fqn=None, mode='overwrite'):
     '''Write a managed Delta table into `schema_fqn` (defaults to the Gold database).
     Pass BRONZE_SCHEMA_FQN / SILVER_SCHEMA_FQN to land a table in another layer.'''
