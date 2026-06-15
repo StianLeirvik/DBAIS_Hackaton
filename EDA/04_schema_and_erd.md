@@ -55,26 +55,26 @@ erDiagram
         double  data_quality_score
     }
     FACILITY_SOURCE {
-        string  source_pk PK
+        string  source_id PK "sha2(facility_id+url)"
         string  facility_id FK
         string  source_url
-        string  source_type "overture|dynamic.."
         boolean is_official
     }
     FACILITY_CONTACT {
-        string  contact_pk PK
+        string  contact_id PK "sha2(facility_id+channel+value)"
         string  facility_id FK
         string  channel "phone|email|web|fb"
         string  value
         boolean is_official
     }
     FACILITY_SPECIALTY {
-        string  facility_id FK
-        string  specialty_code FK
+        string  facility_id PK,FK
+        string  specialty_code PK,FK
         int     mention_count
         double  confidence
     }
     FACILITY_PROCEDURE {
+        string  claim_id PK "sha2(facility_id+text)"
         string  facility_id FK
         string  procedure_text
         string  normalized_tag
@@ -86,6 +86,7 @@ erDiagram
         string  evidence_source_url
     }
     FACILITY_EQUIPMENT {
+        string  claim_id PK "sha2(facility_id+text)"
         string  facility_id FK
         string  equipment_text
         string  normalized_tag
@@ -97,6 +98,7 @@ erDiagram
         string  evidence_source_url
     }
     FACILITY_CAPABILITY {
+        string  claim_id PK "sha2(facility_id+text)"
         string  facility_id FK
         string  capability_text
         double  confidence
@@ -183,6 +185,27 @@ erDiagram
         timestamp created_at
     }
 ```
+
+## Keys & constraints (Unity Catalog)
+
+Unity Catalog **PK/FK are informational, not enforced** — they document the model, power
+Catalog Explorer's auto-ERD and BI-tool joins, and (with `RELY`) let the optimizer rewrite
+queries. We pair them with the one constraint UC *does* enforce, **`NOT NULL` on key columns
+only**, so the pipeline keeps and tags messy records instead of rejecting them.
+
+| Convention | Choice |
+|---|---|
+| Enforced | `NOT NULL` on every PK column (nothing else) |
+| `RELY` | only on dimensions whose key the pipeline guarantees unique (`dim_facility`, `dim_pincode`, `dim_district_health`, `dim_specialty`, `dim_care_need`, the bridge, `silver_facilities`) |
+| No `RELY` | append-only `user_*` tables (runtime data — uniqueness not promised) |
+| Surrogate keys | claim tables have no natural single-column key, so we mint `claim_id` / `source_id` / `contact_id` = `sha2(facility_id + text, 256)` |
+| Composite keys | `facility_specialty (facility_id, specialty_code)`, `bridge_care_need_specialty (care_need, specialty_code)`, `user_shortlist_item (shortlist_id, facility_id)` |
+
+Because `write_table` overwrites with `overwriteSchema`, constraints are wiped on each write
+and **re-applied right after** via `add_pk` / `add_fk` (defined in `00_setup`). A parent can't
+be overwritten while an FK points at it, so each parent calls `drop_all_fks()` (a registry-driven
+drop of every pipeline FK) before its write; the children re-add their FKs later in the run.
+This keeps full top-to-bottom re-runs idempotent.
 
 ## Why this fits the Referral Copilot
 

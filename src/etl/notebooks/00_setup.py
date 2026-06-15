@@ -166,3 +166,66 @@ def reliability_expr(has_official, n_sources, matched_terms, geo_valid):
                     .otherwise(F.lit('Uncertain')))
     is_reliable = reliability == F.lit('Reliable')
     return is_reliable, reliability, reason
+
+# ----- Primary / foreign key helpers (Unity Catalog: informational, NOT enforced) -----
+# Databricks does NOT enforce PK/FK — they are metadata that powers Catalog Explorer's ERD,
+# BI-tool joins, and (with RELY) optimizer rewrites. We DO enforce NOT NULL on PK columns
+# (a PK requirement) but keep every other column nullable, so messy records are kept and
+# tagged, never rejected. RELY is opt-in — only set it where uniqueness genuinely holds.
+#
+# Registry of every pipeline FK so a parent can drop the child FKs before it is overwritten
+# (UC blocks overwriting a table that an FK references). FKs are re-added by the child
+# notebooks later in a normal top-to-bottom run, so this keeps full re-runs safe.
+PIPELINE_FKS = [
+    # (schema_fqn, child_table, fk_name)
+    (GOLD_SCHEMA_FQN, 'dim_facility',               'fk_dim_facility_pincode'),
+    (GOLD_SCHEMA_FQN, 'facility_procedure',         'fk_facility_procedure_facility'),
+    (GOLD_SCHEMA_FQN, 'facility_equipment',         'fk_facility_equipment_facility'),
+    (GOLD_SCHEMA_FQN, 'facility_capability',        'fk_facility_capability_facility'),
+    (GOLD_SCHEMA_FQN, 'facility_specialty',         'fk_facility_specialty_facility'),
+    (GOLD_SCHEMA_FQN, 'facility_source',            'fk_facility_source_facility'),
+    (GOLD_SCHEMA_FQN, 'facility_contact',           'fk_facility_contact_facility'),
+    (GOLD_SCHEMA_FQN, 'facility_evidence_summary',  'fk_facility_evidence_summary_facility'),
+    (GOLD_SCHEMA_FQN, 'bridge_care_need_specialty', 'fk_bridge_care_need'),
+    (GOLD_SCHEMA_FQN, 'bridge_care_need_specialty', 'fk_bridge_specialty'),
+    (GOLD_SCHEMA_FQN, 'user_shortlist',             'fk_user_shortlist_scenario'),
+    (GOLD_SCHEMA_FQN, 'user_shortlist_item',        'fk_user_shortlist_item_shortlist'),
+]
+
+def _safe_sql(q):
+    '''Run SQL, swallowing errors (used for best-effort DROP CONSTRAINT on maybe-missing tables).'''
+    try:
+        spark.sql(q)
+    except Exception:
+        pass
+
+def drop_all_fks():
+    '''Drop every pipeline FK (if present) so referenced parent tables can be overwritten.
+    Call at the top of any notebook that overwrites a parent table.'''
+    for sfqn, tbl, fk in PIPELINE_FKS:
+        _safe_sql(f'ALTER TABLE {sfqn}.{tbl} DROP CONSTRAINT IF EXISTS {fk}')
+
+def add_pk(name, cols, schema_fqn=None, rely=False):
+    '''Set NOT NULL on the PK column(s) + (re)create an informational PRIMARY KEY (idempotent).
+    rely=True lets the optimizer trust it — only where the key is genuinely unique.'''
+    target = schema_fqn or GOLD_SCHEMA_FQN
+    fqn = f'{target}.{name}'
+    cols = [cols] if isinstance(cols, str) else list(cols)
+    for c in cols:
+        spark.sql(f'ALTER TABLE {fqn} ALTER COLUMN {c} SET NOT NULL')
+    spark.sql(f'ALTER TABLE {fqn} DROP CONSTRAINT IF EXISTS pk_{name}')
+    spark.sql(f'ALTER TABLE {fqn} ADD CONSTRAINT pk_{name} PRIMARY KEY ({", ".join(cols)})'
+              + (' RELY' if rely else ''))
+    print(f'  PK pk_{name} ({", ".join(cols)}) on {fqn}')
+
+def add_fk(name, fk_name, cols, ref_fqn, ref_cols, schema_fqn=None):
+    '''(Re)create an informational FOREIGN KEY (idempotent). The parent must already have a
+    PRIMARY KEY/UNIQUE on ref_cols. Not enforced — surfaces the relationship in the ERD.'''
+    target = schema_fqn or GOLD_SCHEMA_FQN
+    fqn = f'{target}.{name}'
+    cols = [cols] if isinstance(cols, str) else list(cols)
+    ref_cols = [ref_cols] if isinstance(ref_cols, str) else list(ref_cols)
+    spark.sql(f'ALTER TABLE {fqn} DROP CONSTRAINT IF EXISTS {fk_name}')
+    spark.sql(f'ALTER TABLE {fqn} ADD CONSTRAINT {fk_name} '
+              f'FOREIGN KEY ({", ".join(cols)}) REFERENCES {ref_fqn} ({", ".join(ref_cols)})')
+    print(f'  FK {fk_name}: {name}({", ".join(cols)}) -> {ref_fqn}({", ".join(ref_cols)})')

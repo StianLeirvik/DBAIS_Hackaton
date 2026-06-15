@@ -21,6 +21,9 @@
 
 bp = spark.table(f'{BRONZE_SCHEMA_FQN}.bronze_pincode')
 
+# dim_facility (Gold) carries an FK to dim_pincode; drop it first so this overwrite is allowed.
+drop_all_fks()
+
 pin = (bp
        .withColumn('pincode', F.regexp_extract(F.col('pincode'), r'(\d{6})', 1))
        .withColumn('lat', to_double(F.col('latitude')))
@@ -37,6 +40,7 @@ dim_pincode = (pin.groupBy('pincode')
                     F.first('state', ignorenulls=True).alias('state'),
                     F.count('*').alias('office_count')))
 write_table(dim_pincode, 'dim_pincode', SILVER_SCHEMA_FQN)
+add_pk('dim_pincode', 'pincode', SILVER_SCHEMA_FQN, rely=True)
 
 # COMMAND ----------
 
@@ -78,3 +82,4 @@ for c in indicators.values():
     suppressed = cond if suppressed is None else (suppressed | cond)
 dim_health = dim_health.withColumn('has_suppressed_values', suppressed)
 write_table(dim_health, 'dim_district_health', SILVER_SCHEMA_FQN)
+add_pk('dim_district_health', 'district_state_key', SILVER_SCHEMA_FQN, rely=True)

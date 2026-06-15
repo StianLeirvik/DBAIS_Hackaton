@@ -69,7 +69,13 @@ dim_out = dim.select(
     'source_urls_arr', 'source_types_arr', 'phones_arr', 'websites_arr',
     'n_specialties', 'n_procedures', 'n_equipment', 'n_capability', 'n_sources',
     'data_quality_score', 'evidence_band', 'evidence_strength')
+drop_all_fks()                       # re-run safe: clear child FKs before overwriting the parent
 write_table(dim_out, 'dim_facility')
+add_pk('dim_facility', 'facility_id', rely=True)
+# pincode lives in the Silver reference dim; FK is informational (many facilities have no
+# matching pincode row, which is fine for a NOT-ENFORCED constraint).
+add_fk('dim_facility', 'fk_dim_facility_pincode', 'pincode',
+       f'{SILVER_SCHEMA_FQN}.dim_pincode', 'pincode')
 
 # COMMAND ----------
 

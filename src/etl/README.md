@@ -4,29 +4,25 @@ Databricks (Free Edition) Medallion pipeline that turns the 10,000 messy Indian
 healthcare facility records into an **evidence-attached, uncertainty-aware** referral
 dataset for the Referral Copilot app.
 
-Design rationale lives in [../EDA](../EDA): data overview, quality issues, cleaning
+Design rationale lives in [../../EDA](../../EDA): data overview, quality issues, cleaning
 route, and the target schema / ERD. This folder is the runnable implementation of it.
 
 ## Layout
 
 ```
-src/
+src/etl/
   README.md
   config.py                  # table names + constants (importable by the app layer)
-  seeds/                     # version-controlled reference vocabularies
-    dim_specialty.csv
-    dim_care_need.csv
-    bridge_care_need_specialty.csv
   notebooks/                 # Databricks source-format notebooks (.py)
-    00_setup.py              # config, schema/volume, shared helper functions
+    00_setup.py              # config, schemas, shared helpers (incl. PK/FK helpers)
     01_bronze_ingest.py      # read provided UC tables -> bronze_* Delta (verbatim)
-    02_silver_reference.py   # dim_pincode + dim_district_health
+    02_silver_reference.py   # dim_pincode + dim_district_health (+ PKs)
     03_silver_facilities.py  # clean facilities (nulls, JSON arrays, casts, geo validation)
-    04_gold_dim_facility.py  # cluster dedup -> golden facility record
-    05_gold_evidence.py      # explode claims + provenance + confidence + evidence_band
-    06_gold_reference.py     # dim_specialty / dim_care_need / bridge (from seeds)
+    04_gold_dim_facility.py  # cluster dedup -> golden facility record (PK + pincode FK)
+    05_gold_evidence.py      # explode claims + provenance + confidence + reliability (PK/FK)
+    06_gold_reference.py     # dim_specialty / dim_care_need / bridge (inline vocabularies)
     07_gold_serving_views.py # vw_facility_enriched + search_referrals()
-    08_gold_user_persistence.py # user_* tables + save/note/override/review helpers
+    08_gold_user_persistence.py # user_* tables + save/note/override/review helpers (PK/FK)
 ```
 
 > The notebooks are **Databricks source-format `.py` files** (`# Databricks notebook source`,
@@ -74,6 +70,16 @@ The Bronze layer reads them directly with `spark.table(...)` — there is no CSV
 - `vw_facility_enriched` + `search_referrals(location, care_need)` — location + need in,
   ranked candidates out (distance, matching evidence, missing/suspicious evidence, citations).
 - `user_*` — persisted scenarios, shortlists, notes, overrides, and review decisions.
+
+## Keys & constraints
+
+Unity Catalog **PK/FK are informational (not enforced)** — they document the model and drive
+Catalog Explorer's ERD + BI joins. We enforce only **`NOT NULL` on key columns**, so messy
+records are tagged, never rejected. `RELY` is set only on dimensions with pipeline-guaranteed
+unique keys (not on the append-only `user_*` tables). Claim tables get a surrogate
+`claim_id` / `source_id` / `contact_id` (`sha2` of facility_id + text). Helpers `add_pk` /
+`add_fk` / `drop_all_fks` live in `00_setup` and re-apply constraints after each overwrite —
+see [../../EDA/04_schema_and_erd.md](../../EDA/04_schema_and_erd.md#keys--constraints-unity-catalog).
 
 ## Honesty / uncertainty signals (never hide weak evidence)
 

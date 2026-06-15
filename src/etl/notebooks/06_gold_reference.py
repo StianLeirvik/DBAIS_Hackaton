@@ -8,7 +8,8 @@
 # MAGIC - **`dim_care_need`** — user-facing needs + free-text `match_keywords` for procedure/equipment search.
 # MAGIC - **`bridge_care_need_specialty`** — weighted care-need → specialty mapping.
 # MAGIC
-# MAGIC Rows are defined inline here (source of truth) and also mirrored in `src/seeds/*.csv`.
+# MAGIC Rows are defined inline here (the single source of truth). Each table gets an
+# MAGIC informational PRIMARY KEY; the bridge carries FKs to both dims.
 
 # COMMAND ----------
 
@@ -39,7 +40,10 @@ specialty_rows = [
     ('psychiatry', 'Psychiatry', 'medical', ['psychiatry']),
 ]
 dim_specialty = spark.createDataFrame(specialty_rows, ['specialty_code', 'display_name', 'category', 'aliases'])
+# bridge (below) carries FKs to these dims; drop them first so the overwrite is allowed.
+drop_all_fks()
 write_table(dim_specialty, 'dim_specialty')
+add_pk('dim_specialty', 'specialty_code', rely=True)
 
 # COMMAND ----------
 
@@ -57,6 +61,7 @@ care_need_rows = [
 ]
 dim_care_need = spark.createDataFrame(care_need_rows, ['care_need', 'display_name', 'match_keywords'])
 write_table(dim_care_need, 'dim_care_need')
+add_pk('dim_care_need', 'care_need', rely=True)
 
 bridge_rows = [
     ('dialysis', 'nephrology', 1.0), ('dialysis', 'internalMedicine', 0.4),
@@ -73,3 +78,8 @@ bridge_rows = [
 ]
 bridge = spark.createDataFrame(bridge_rows, ['care_need', 'specialty_code', 'weight'])
 write_table(bridge, 'bridge_care_need_specialty')
+add_pk('bridge_care_need_specialty', ['care_need', 'specialty_code'], rely=True)
+add_fk('bridge_care_need_specialty', 'fk_bridge_care_need', 'care_need',
+       f'{GOLD_SCHEMA_FQN}.dim_care_need', 'care_need')
+add_fk('bridge_care_need_specialty', 'fk_bridge_specialty', 'specialty_code',
+       f'{GOLD_SCHEMA_FQN}.dim_specialty', 'specialty_code')

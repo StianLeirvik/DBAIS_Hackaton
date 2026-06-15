@@ -95,6 +95,7 @@ silver = f.select(
     'specialties_arr', 'procedure_arr', 'equipment_arr', 'capability_arr',
     'source_urls_arr', 'source_types_arr', 'source_ids_arr', 'phones_arr', 'websites_arr')
 write_table(silver, 'silver_facilities', SILVER_SCHEMA_FQN)
+add_pk('silver_facilities', 'facility_id', SILVER_SCHEMA_FQN, rely=True)
 
 # COMMAND ----------
 

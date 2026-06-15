@@ -12,7 +12,7 @@ name = "referral-copilot"
 version = "0.1.0"
 description = "Referral Copilot — evidence-attached, uncertainty-aware healthcare referral pipeline + Databricks App over the Virtue Foundation dataset."
 authors = [{ name = "DBAIS Hackathon Team" }]
-readme = "src/README.md"
+readme = "src/etl/README.md"
 requires-python = ">=3.11,<3.13"  # Databricks Apps run on 3.11; databricks-connect supports 3.11/3.12
 dependencies = [
     "databricks-connect>=15.4,<16",  # remote Spark session against the workspace (bundles pyspark)
@@ -65,7 +65,7 @@ select = ["E", "F", "I", "UP", "B"]
 # Databricks notebooks rely on runtime-injected globals (spark, dbutils, display) and the
 # helpers loaded via `%run ./00_setup` (F, write_table, clean_null, SOURCE_*_TABLE, ...).
 # These are undefined to a local linter, so silence "undefined name" + unused-import noise.
-"src/notebooks/*.py" = ["F821", "F401", "E402"]
+"src/etl/notebooks/*.py" = ["F821", "F401", "E402"]
 
 [tool.black]
 line-length = 100

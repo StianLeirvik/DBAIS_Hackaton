@@ -45,6 +45,25 @@ print('user_* tables ready')
 
 # COMMAND ----------
 
+# Informational PK/FK on the persistence tables. NOT NULL is enforced on the id columns
+# (every helper mints a uuid, so this always holds); the relationships are surfaced in the
+# Catalog ERD. No RELY here — these are appended at runtime, so we don't promise the
+# optimizer uniqueness (e.g. the same facility could be added to a shortlist twice).
+add_pk('user_scenario', 'scenario_id')
+add_pk('user_shortlist', 'shortlist_id')
+add_pk('user_shortlist_item', ['shortlist_id', 'facility_id'])
+add_pk('user_note', 'note_id')
+add_pk('user_override', 'override_id')
+add_pk('user_review_decision', 'review_id')
+# scenario_id is nullable (a shortlist need not come from a saved scenario) — fine for a
+# NOT-ENFORCED FK, where NULLs simply don't participate.
+add_fk('user_shortlist', 'fk_user_shortlist_scenario', 'scenario_id',
+       f'{GOLD_SCHEMA_FQN}.user_scenario', 'scenario_id')
+add_fk('user_shortlist_item', 'fk_user_shortlist_item_shortlist', 'shortlist_id',
+       f'{GOLD_SCHEMA_FQN}.user_shortlist', 'shortlist_id')
+
+# COMMAND ----------
+
 import uuid, json, datetime
 from pyspark.sql.types import (StructType, StructField, StringType, IntegerType,
                                DoubleType, TimestampType)

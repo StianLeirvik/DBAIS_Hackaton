@@ -68,10 +68,14 @@ def explode_evidence(field_col, text_name, table_name, support_cols):
             .withColumn('reliability', rel)
             .withColumn('reliability_reason', reason)
             .withColumnRenamed('primary_citation', 'evidence_source_url')
-            .select('facility_id', text_name, 'normalized_tag', 'confidence',
+            .withColumn('claim_id', F.sha2(F.concat_ws('||', F.col('facility_id'), F.col(text_name)), 256))
+            .select('claim_id', 'facility_id', text_name, 'normalized_tag', 'confidence',
                     'corroborating_terms', 'is_reliable', 'reliability',
                     'reliability_reason', 'evidence_source_url'))
     write_table(ev, table_name)
+    add_pk(table_name, 'claim_id')                       # surrogate PK (hash of facility_id|text)
+    add_fk(table_name, f'fk_{table_name}_facility', 'facility_id',
+           f'{GOLD_SCHEMA_FQN}.dim_facility', 'facility_id')
 
 # procedure is the key "can they actually do it?" claim -> corroborate with equipment/specialty/capability
 explode_evidence('procedure_arr', 'procedure_text', 'facility_procedure',
@@ -96,6 +100,9 @@ fac_spec = (raw_spec.groupBy('facility_id', F.lower(F.trim(F.col('code'))).alias
             .agg(F.count('*').alias('mention_count'))
             .join(conf.select('facility_id', 'confidence'), 'facility_id', 'left'))
 write_table(fac_spec, 'facility_specialty')
+add_pk('facility_specialty', ['facility_id', 'specialty_code'], rely=True)
+add_fk('facility_specialty', 'fk_facility_specialty_facility', 'facility_id',
+       f'{GOLD_SCHEMA_FQN}.dim_facility', 'facility_id')
 
 # COMMAND ----------
 
@@ -104,8 +111,12 @@ fac_source = (d.select('facility_id', 'official_website', F.explode('source_urls
               .withColumn('is_official', F.when(F.col('official_website').isNotNull() &
                           F.col('source_url').contains(F.regexp_replace(F.col('official_website'), r'^https?://', '')), True)
                           .otherwise(False))
-              .drop('official_website'))
+              .drop('official_website')
+              .withColumn('source_id', F.sha2(F.concat_ws('||', F.col('facility_id'), F.col('source_url')), 256)))
 write_table(fac_source, 'facility_source')
+add_pk('facility_source', 'source_id')
+add_fk('facility_source', 'fk_facility_source_facility', 'facility_id',
+       f'{GOLD_SCHEMA_FQN}.dim_facility', 'facility_id')
 
 # facility_contact — one row per channel/value
 phones   = d.select('facility_id', F.explode('phones_arr').alias('value')).withColumn('channel', F.lit('phone')).withColumn('is_official', F.lit(False))
@@ -114,8 +125,12 @@ emails   = d.where(F.col('email').isNotNull()).select('facility_id', F.col('emai
 webs     = d.select('facility_id', F.explode('websites_arr').alias('value')).withColumn('channel', F.lit('web')).withColumn('is_official', F.lit(False))
 fb       = d.where(F.col('facebook_link').isNotNull()).select('facility_id', F.col('facebook_link').alias('value')).withColumn('channel', F.lit('facebook')).withColumn('is_official', F.lit(False))
 contacts = (phones.unionByName(off_ph).unionByName(emails).unionByName(webs).unionByName(fb)
-            .dropDuplicates(['facility_id', 'channel', 'value']))
+            .dropDuplicates(['facility_id', 'channel', 'value'])
+            .withColumn('contact_id', F.sha2(F.concat_ws('||', F.col('facility_id'), F.col('channel'), F.col('value')), 256)))
 write_table(contacts, 'facility_contact')
+add_pk('facility_contact', 'contact_id')
+add_fk('facility_contact', 'fk_facility_contact_facility', 'facility_id',
+       f'{GOLD_SCHEMA_FQN}.dim_facility', 'facility_id')
 
 # COMMAND ----------
 
@@ -129,6 +144,9 @@ summary = (base.select('facility_id', 'confidence', 'n_sources')
                  .otherwise(F.lit('Low'))))
 write_table(summary.select('facility_id', 'evidence_strength', 'evidence_band', 'confidence', 'n_sources'),
             'facility_evidence_summary')
+add_pk('facility_evidence_summary', 'facility_id', rely=True)
+add_fk('facility_evidence_summary', 'fk_facility_evidence_summary_facility', 'facility_id',
+       f'{GOLD_SCHEMA_FQN}.dim_facility', 'facility_id')
 
 spark.sql(f'''
 MERGE INTO {SCHEMA_FQN}.dim_facility AS t
