@@ -28,9 +28,9 @@ f = (b
      .withColumn('facility_type', F.lower(clean_null(F.col('facilityTypeId'))))
      .withColumn('operator_type', F.lower(clean_null(F.col('operatorTypeId'))))
      .withColumn('description', clean_null(F.col('description')))
-     .withColumn('year_established', clean_null(F.col('yearEstablished')).cast('int'))
-     .withColumn('capacity_beds', clean_null(F.col('capacity')).cast('int'))
-     .withColumn('number_doctors', clean_null(F.col('numberDoctors')).cast('int'))
+     .withColumn('year_established', to_int(F.col('yearEstablished')))
+     .withColumn('capacity_beds', to_int(F.col('capacity')))
+     .withColumn('number_doctors', to_int(F.col('numberDoctors')))
      .withColumn('city', norm_text(clean_null(F.col('address_city'))))
      .withColumn('state', norm_text(clean_null(F.col('address_stateOrRegion'))))
      .withColumn('pincode', F.regexp_extract(F.coalesce(F.col('address_zipOrPostcode'), F.lit('')), r'(\d{6})', 1))
@@ -62,8 +62,8 @@ f = (f.withColumn('year_established', F.when(F.col('year_established').between(Y
 
 # COMMAND ----------
 
-f = (f.withColumn('lat_raw', F.col('latitude').cast('double'))
-       .withColumn('lon_raw', F.col('longitude').cast('double')))
+f = (f.withColumn('lat_raw', to_double(F.col('latitude')))
+       .withColumn('lon_raw', to_double(F.col('longitude'))))
 
 p = (spark.table(f'{SCHEMA_FQN}.dim_pincode')
      .select('pincode', 'centroid_lat', 'centroid_long',

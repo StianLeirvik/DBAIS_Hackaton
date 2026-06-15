@@ -23,8 +23,8 @@ bp = spark.table(f'{SCHEMA_FQN}.bronze_pincode')
 
 pin = (bp
        .withColumn('pincode', F.regexp_extract(F.col('pincode'), r'(\d{6})', 1))
-       .withColumn('lat', F.col('latitude').cast('double'))
-       .withColumn('lon', F.col('longitude').cast('double'))
+       .withColumn('lat', to_double(F.col('latitude')))
+       .withColumn('lon', to_double(F.col('longitude')))
        .withColumn('district', norm_text(F.col('district')))
        .withColumn('state', norm_text(F.col('statename')))
        .filter((F.col('pincode') != '') & F.col('lat').isNotNull() & F.col('lon').isNotNull())
@@ -51,8 +51,7 @@ bn = spark.table(f'{SCHEMA_FQN}.bronze_nfhs')
 def clean_nfhs(colname):
     cc = F.trim(F.col(colname))
     cc = F.regexp_replace(cc, r'[()]', '')          # strip small-sample markers
-    cc = F.when(cc == '*', None).otherwise(cc)        # * = suppressed
-    return cc.cast('double')
+    return to_double(cc)                              # '*', 'NA', blanks -> NULL safely
 
 # raw column name -> friendly name
 indicators = {

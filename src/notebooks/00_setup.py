@@ -68,6 +68,20 @@ def clean_null(c):
     cc = F.trim(c)
     return F.when(cc.isin(*_NULL_TOKENS), None).otherwise(cc)
 
+_NUM_RE = r'^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$'
+
+def to_double(c):
+    '''ANSI-safe string->double: non-numeric values ('NA', '*', '', text) become NULL
+    instead of raising CAST_INVALID_INPUT. Invalid entries are NULLed BEFORE the cast,
+    so it is safe regardless of CASE-WHEN short-circuit behaviour.'''
+    s = F.trim(c.cast('string'))
+    s = F.when(s.rlike(_NUM_RE), s).otherwise(None)
+    return s.cast('double')
+
+def to_int(c):
+    '''ANSI-safe string->int via double (handles '100', '100.0'; malformed -> NULL).'''
+    return to_double(c).cast('int')
+
 def parse_json_array(c):
     '''Parse a JSON-encoded string array into a deduped array<string> (nulls/blanks dropped).'''
     arr = F.from_json(c, ArrayType(StringType()))
