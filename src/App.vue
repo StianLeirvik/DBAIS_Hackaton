@@ -1,0 +1,225 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { Bookmark } from '@lucide/vue'
+import SearchBar from './components/SearchBar.vue'
+import CandidateCard from './components/CandidateCard.vue'
+import DetailPanel from './components/DetailPanel.vue'
+import ShortlistDrawer from './components/ShortlistDrawer.vue'
+import FacilityMapModal from './components/FacilityMapModal.vue'
+import GenieWidget from './components/GenieWidget.vue'
+import { useSearch } from './composables/useSearch'
+import { useSession } from './composables/useSession'
+import type { ScoredFacility } from './types'
+
+const { location, careNeedId, sortedResults, loading, error, hasSearched, userCenter, search } = useSearch()
+const { sessions, getSession, toggleSave, toggleVerify, toggleDismiss, setNote, effectiveConfidence } = useSession()
+
+const selectedId = ref<string | null>(null)
+const drawerOpen = ref(false)
+const mapOpen = ref(false)
+
+const orderedResults = computed(() => {
+  return [...sortedResults.value].sort((a, b) => {
+    const da = getSession(a.facility_id).dismissed ? 1 : 0
+    const db = getSession(b.facility_id).dismissed ? 1 : 0
+    return da - db || b.overallScore - a.overallScore
+  })
+})
+
+const selectedFacility = computed<ScoredFacility | null>(() =>
+  sortedResults.value.find(f => f.facility_id === selectedId.value) ?? null,
+)
+
+const savedCount = computed(() =>
+  Object.values(sessions).filter(s => s.saved).length,
+)
+
+const savedFacilities = computed(() =>
+  sortedResults.value.filter(f => sessions[f.facility_id]?.saved),
+)
+
+function selectFacility(id: string) {
+  selectedId.value = id
+}
+
+function viewFacilityMap(id: string) {
+  selectedId.value = id
+  mapOpen.value = true
+}
+
+function handleSearch() {
+  selectedId.value = null
+  search()
+}
+</script>
+
+<template>
+  <div class="min-h-screen flex flex-col" style="background:var(--paper)">
+
+    <!-- ─── Header ────────────────────────────────────────────────────────── -->
+    <header class="sticky top-0 z-50 flex items-center justify-between px-5 py-3"
+            style="background:var(--ink)">
+      <div class="flex items-center gap-3">
+        <span class="font-serif text-white text-xl font-semibold leading-none">◈ CareMap</span>
+      </div>
+      <button
+        class="flex items-center gap-2 text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors"
+        style="background:rgba(255,255,255,0.12);color:white"
+        @click="drawerOpen = true"
+      >
+        <Bookmark :size="15" />
+        Shortlist {{ savedCount > 0 ? savedCount : '' }}
+      </button>
+    </header>
+
+    <!-- ─── Honesty ribbon ────────────────────────────────────────────────── -->
+    <div class="px-5 py-2.5 text-xs font-medium" style="background:#fffbeb;color:#78350f;border-bottom:1px solid #fde68a">
+      <span class="font-bold">Honesty note:</span>
+      Scores are derived from catalog records only — not real-time data. Distances are illustrative (straight-line, not travel time). Always confirm service availability by phone before referral.
+    </div>
+
+    <!-- ─── Search area ────────────────────────────────────────────────────── -->
+    <div class="px-5 pt-5 pb-4" style="border-bottom:1px solid var(--line)">
+      <SearchBar
+        v-model:location="location"
+        v-model:care-need-id="careNeedId"
+        :loading="loading"
+        @search="handleSearch"
+      />
+    </div>
+
+    <!-- ─── Error banner ──────────────────────────────────────────────────── -->
+    <div v-if="error" class="mx-5 mt-3 text-sm px-4 py-3 rounded-lg"
+         style="background:#fdf0ec;color:var(--coral);border:1px solid var(--coral)">
+      <span class="font-semibold">Error:</span> {{ error }}
+    </div>
+
+    <!-- ─── Results header ────────────────────────────────────────────────── -->
+    <div v-if="hasSearched && !loading && orderedResults.length > 0"
+         class="px-5 pt-4 pb-2 text-sm flex items-center justify-between" style="color:var(--ink-soft)">
+      <span>
+        <span class="font-bold" style="color:var(--ink)">{{ orderedResults.length }} candidates</span>
+        · ranked by match strength · record confidence shown separately, never blended in
+      </span>
+      <button
+        class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+        style="background:var(--ink);color:white"
+        @click="mapOpen = true"
+      >
+        ◈ Map
+      </button>
+    </div>
+
+    <!-- ─── Welcome state (full-width, centered) ──────────────────────────── -->
+    <div v-if="!hasSearched" class="flex-1 flex flex-col items-center justify-center py-24 text-center">
+      <div class="font-serif text-6xl font-light mb-5" style="color:var(--teal)">◈</div>
+      <h2 class="font-serif text-3xl font-semibold mb-3" style="color:var(--ink)">Find the right facility</h2>
+      <p class="text-sm leading-relaxed max-w-sm" style="color:var(--ink-soft)">
+        Select a care need and enter a location to get a ranked shortlist with transparent match scores.
+      </p>
+    </div>
+
+    <!-- ─── Main body ─────────────────────────────────────────────────────── -->
+    <div v-else class="flex-1 flex px-5 pb-8 pt-2 gap-5 items-start">
+
+      <!-- Left: candidate list -->
+      <div class="shrink-0 flex flex-col gap-3" style="width:min(440px,100%)">
+
+        <!-- Skeleton loaders -->
+        <template v-if="loading">
+          <div v-for="i in 4" :key="i"
+               class="rounded-xl overflow-hidden"
+               style="background:white;border:1px solid var(--line)">
+            <!-- Top row -->
+            <div class="flex items-start gap-3 px-4 pt-4 pb-3">
+              <div class="w-5 h-8 rounded animate-pulse shrink-0" style="background:#e8eaed" />
+              <div class="flex-1 space-y-2 pt-0.5">
+                <div class="h-5 rounded animate-pulse" style="background:#e8eaed;width:72%" />
+                <div class="h-3 rounded animate-pulse" style="background:#f1f3f4;width:50%" />
+                <div class="h-5 w-28 rounded-full animate-pulse" style="background:#f1f3f4" />
+              </div>
+              <div class="flex flex-col items-center gap-1 shrink-0">
+                <div class="w-10 h-9 rounded animate-pulse" style="background:#e8eaed" />
+                <div class="w-8 h-2 rounded animate-pulse" style="background:#f1f3f4" />
+              </div>
+            </div>
+            <!-- Footer row -->
+            <div class="flex items-center gap-3 px-4 pb-3 pt-2" style="border-top:1px solid var(--line)">
+              <div class="h-3 w-20 rounded animate-pulse" style="background:#f1f3f4" />
+              <div class="flex gap-2 ml-auto">
+                <div class="h-3 w-6 rounded-full animate-pulse" style="background:#f1f3f4" />
+                <div class="h-3 w-6 rounded-full animate-pulse" style="background:#f1f3f4" />
+                <div class="h-3 w-6 rounded-full animate-pulse" style="background:#f1f3f4" />
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- No results -->
+        <div v-else-if="orderedResults.length === 0" class="text-center py-12 text-sm" style="color:var(--ink-soft)">
+          No facilities found. Try a different location or care need.
+        </div>
+
+        <!-- Cards -->
+        <template v-else>
+          <CandidateCard
+            v-for="(facility, index) in orderedResults"
+            :key="facility.facility_id"
+            :facility="facility"
+            :rank="index + 1"
+            :selected="selectedId === facility.facility_id"
+            :eff-confidence="effectiveConfidence(facility)"
+            :session="getSession(facility.facility_id)"
+            @select="selectFacility(facility.facility_id)"
+            @view-map="viewFacilityMap(facility.facility_id)"
+          />
+        </template>
+      </div>
+
+      <!-- Right: detail panel -->
+      <div v-if="selectedFacility" class="flex-1 sticky top-[104px]">
+        <DetailPanel
+          :facility="selectedFacility"
+          :session="getSession(selectedFacility.facility_id)"
+          :eff-confidence="effectiveConfidence(selectedFacility)"
+          @toggle-save="toggleSave(selectedFacility!.facility_id, selectedFacility ?? undefined)"
+          @toggle-verify="toggleVerify(selectedFacility!.facility_id)"
+          @toggle-dismiss="toggleDismiss(selectedFacility!.facility_id)"
+          @save-note="(n) => setNote(selectedFacility!.facility_id, n)"
+        />
+      </div>
+      <div v-else-if="!loading && orderedResults.length > 0"
+           class="flex-1 sticky top-[104px] flex items-center justify-center h-72 rounded-2xl"
+           style="border:2px dashed var(--line);color:var(--ink-soft)">
+        <p class="text-sm">Select a candidate to see its full record</p>
+      </div>
+
+    </div>
+
+    <!-- ─── Shortlist drawer ──────────────────────────────────────────────── -->
+    <ShortlistDrawer
+      :open="drawerOpen"
+      :facilities="savedFacilities"
+      :sessions="sessions"
+      :eff-confidence="effectiveConfidence"
+      @close="drawerOpen = false"
+      @unsave="(id) => toggleSave(id)"
+    />
+    <!-- ─── Map modal ───────────────────────────────────────────── -->
+    <FacilityMapModal
+      :open="mapOpen"
+      :facilities="sortedResults"
+      :selected="selectedFacility"
+      :user-lat="userCenter?.lat ?? null"
+      :user-lng="userCenter?.lng ?? null"
+      :location-label="location"
+      @close="mapOpen = false"
+      @select="(id) => { selectFacility(id); mapOpen = false }"
+    />
+
+    <!-- ─── Genie AI floating chat ───────────────────────────────── -->
+    <GenieWidget />
+
+  </div>
+</template>
+
