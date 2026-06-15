@@ -1,0 +1,73 @@
+# 03 — Cleaning Route (Medallion)
+
+Bronze → Silver → Gold on Databricks Free Edition (Delta tables / Unity Catalog).
+
+## 🥉 Bronze — raw landing
+
+- Ingest all three CSVs **verbatim** as strings (no transforms — auditability).
+- Add lineage columns: `_source_file`, `_ingest_ts`, `_row_hash`.
+
+| Bronze table | Source |
+|---|---|
+| `bronze_facilities` | `facilities_*.csv` |
+| `bronze_pincode` | `india_post_pincode_directory_*.csv` |
+| `bronze_nfhs` | `nfhs_5_district_health_indicators_*.csv` |
+
+## 🥈 Silver — cleaned & conformed
+
+**Facilities**
+1. **Null normalization** — `"null" | "NA" | "" | "[]"` → real `NULL`.
+2. **Parse JSON arrays** → `array<string>` for phones, websites, sources, specialties, procedure, equipment, capability; **dedup** elements.
+3. **Type casts** — `yearEstablished`→int (1850–2026), `capacity`/`numberDoctors`→int, lat/long→double, metrics→int, dates→date.
+4. **Geo validation** — keep lat∈[6,38], long∈[68,98]; else fall back to `dim_pincode` centroid; set `geo_is_valid`, `geo_source`.
+5. **Standardize geography** — trim/upper-case city & state, validate 6-digit pincode against `dim_pincode`, flag `state_mismatch`.
+6. **Specialty normalization** — map raw codes to controlled `dim_specialty` (`generalMedicine→internalMedicine`, `ent→otolaryngology`, `dental→dentistry`, …).
+
+**Pincode reference** → `dim_pincode`
+- Drop `NA` coords, cast lat/long to double.
+- Aggregate to **one row per pincode** (centroid = avg of valid office coords, `office_count`).
+
+**NFHS reference** → `dim_district_health`
+- Strip `()` small-sample markers; map `*` → NULL + `is_suppressed`.
+- Cast indicators to double; normalize `district_name` / `state_ut`.
+
+| Silver table | Grain |
+|---|---|
+| `silver_facilities` | 1 cleaned facility |
+| `dim_pincode` | 1 pincode |
+| `dim_district_health` | 1 district |
+
+## 🥇 Gold — serving / business
+
+1. **Deduplicate** per `cluster_id` → one **golden facility** (`dim_facility`); keep member records as supporting evidence.
+2. **Explode arrays** into normalized evidence tables, each row carrying **provenance** (`source_url`, `is_official`) so the app can cite it:
+   - `facility_specialty`, `facility_procedure`, `facility_equipment`, `facility_capability`, `facility_source`, `facility_contact`.
+3. **Care-need mapping** — build `dim_care_need` + `bridge_care_need_specialty` so a query like "dialysis" maps to nephrology + procedure/equipment keywords.
+4. **Enrich context** — facility → `dim_pincode` → district → `dim_district_health`.
+5. **Confidence & evidence band** — compute transparent per-claim `confidence`
+   (source authority + corroboration count across `source_ids` + recency) and a facility-level `evidence_band` (High / Medium / Low). **Show the evidence, never just the score.**
+6. **Serving views** — `vw_referral_candidates` (location + need → ranked candidates with distance, matching evidence, missing/suspicious evidence).
+7. **User persistence** — create tables for scenarios, shortlists, notes, overrides, review decisions.
+
+## Confidence (transparent formula)
+
+```
+confidence = w1 * source_authority      -- official site / gov > aggregator > social
+           + w2 * corroboration_count   -- distinct source_ids backing the claim
+           + w3 * recency_factor         -- recency_of_page_update / last post date
+```
+
+`evidence_band = High | Medium | Low` thresholds on the facility's aggregate confidence and field coverage.
+
+## Pipeline order
+
+```
+bronze_*  ─►  dim_pincode ─►  silver_facilities (geo fallback uses dim_pincode)
+          ─►  dim_district_health
+                                   │
+                                   ▼
+        dim_facility ─► facility_specialty / procedure / equipment / capability / source / contact
+                                   │
+                                   ▼
+                 vw_referral_candidates  +  user_* persistence tables
+```
