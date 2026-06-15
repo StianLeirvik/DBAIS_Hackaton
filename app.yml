@@ -1,0 +1,7 @@
+command: ["sh", "-c", "./node_modules/.bin/tsx server/index.ts"]
+
+env:
+  - name: DB_CONNECTION_STRING
+    value: "postgresql://dais_master:npg_WzKlQ9TcS3ua@ep-broad-heart-d8y2wfnw.database.us-east-2.cloud.databricks.com/databricks_postgres?sslmode=require"
+  - name: DB_SCHEMA
+    value: "model_v1"
