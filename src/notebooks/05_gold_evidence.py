@@ -86,7 +86,7 @@ explode_evidence('capability_arr', 'capability_text', 'facility_capability',
 # facility_specialty keeps a real mention_count from the *raw* (non-deduped) bronze arrays,
 # mapped from cluster member ids up to the golden facility_id.
 member_map = d.select('facility_id', F.explode('member_ids').alias('unique_id'))
-bron = spark.table(f'{SCHEMA_FQN}.bronze_facilities').select('unique_id', 'specialties')
+bron = spark.table(f'{BRONZE_SCHEMA_FQN}.bronze_facilities').select('unique_id', 'specialties')
 
 raw_spec = (bron.join(member_map, 'unique_id', 'inner')
             .withColumn('code', F.explode(F.from_json(F.col('specialties'), ArrayType(StringType()))))

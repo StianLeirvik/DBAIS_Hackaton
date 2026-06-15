@@ -58,8 +58,11 @@ The Bronze layer reads them directly with `spark.table(...)` — there is no CSV
 | NFHS-5 indicators | `…virtue_foundation_dataset.nfhs_5_district_health_indicators` | `bronze_nfhs` |
 
 > The fully-qualified source names live in [config.py](config.py) (`SOURCE_*_TABLE`) and are
-> mirrored in `00_setup`. On Free Edition the project's own output tables are created in the
-> `workspace.referral_copilot` schema.
+> mirrored in `00_setup`. On Free Edition each medallion layer is written to its **own database**:
+> Bronze → `workspace.referral_copilot_bronze`, Silver → `workspace.referral_copilot_silver`,
+> Gold → `workspace.referral_copilot` (the project database). `00_setup` exposes
+> `BRONZE_SCHEMA_FQN`, `SILVER_SCHEMA_FQN`, `GOLD_SCHEMA_FQN`, and `write_table(df, name, schema_fqn)`
+> routes each table to its layer.
 
 ## What the app consumes (Gold)
 

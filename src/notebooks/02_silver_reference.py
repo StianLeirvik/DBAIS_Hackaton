@@ -19,7 +19,7 @@
 
 # COMMAND ----------
 
-bp = spark.table(f'{SCHEMA_FQN}.bronze_pincode')
+bp = spark.table(f'{BRONZE_SCHEMA_FQN}.bronze_pincode')
 
 pin = (bp
        .withColumn('pincode', F.regexp_extract(F.col('pincode'), r'(\d{6})', 1))
@@ -36,7 +36,7 @@ dim_pincode = (pin.groupBy('pincode')
                     F.first('district', ignorenulls=True).alias('district'),
                     F.first('state', ignorenulls=True).alias('state'),
                     F.count('*').alias('office_count')))
-write_table(dim_pincode, 'dim_pincode')
+write_table(dim_pincode, 'dim_pincode', SILVER_SCHEMA_FQN)
 
 # COMMAND ----------
 
@@ -46,7 +46,7 @@ write_table(dim_pincode, 'dim_pincode')
 
 # COMMAND ----------
 
-bn = spark.table(f'{SCHEMA_FQN}.bronze_nfhs')
+bn = spark.table(f'{BRONZE_SCHEMA_FQN}.bronze_nfhs')
 
 def clean_nfhs(colname):
     cc = F.trim(F.col(colname))
@@ -77,4 +77,4 @@ for c in indicators.values():
     cond = F.col(c).isNull()
     suppressed = cond if suppressed is None else (suppressed | cond)
 dim_health = dim_health.withColumn('has_suppressed_values', suppressed)
-write_table(dim_health, 'dim_district_health')
+write_table(dim_health, 'dim_district_health', SILVER_SCHEMA_FQN)

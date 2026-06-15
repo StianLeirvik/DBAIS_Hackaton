@@ -5,10 +5,19 @@ names and tunable constants. The notebooks mirror these values in ``00_setup`` s
 can be loaded with ``%run ./00_setup`` without importing this module.
 """
 
-# ----- Catalog / schema -----
-CATALOG = "workspace"                 # Free Edition default catalog
-SCHEMA = "referral_copilot"           # all bronze/silver/gold tables live here
-SCHEMA_FQN = f"{CATALOG}.{SCHEMA}"
+# ----- Catalog / per-layer schemas (databases) -----
+# Each medallion layer has its OWN database; Gold (serving) stays in the project database.
+CATALOG = "workspace"                        # Free Edition default catalog
+GOLD_SCHEMA = "referral_copilot"             # Gold (serving) — the project database
+BRONZE_SCHEMA = "referral_copilot_bronze"    # Bronze (raw landing)
+SILVER_SCHEMA = "referral_copilot_silver"    # Silver (cleaned / conformed)
+GOLD_SCHEMA_FQN = f"{CATALOG}.{GOLD_SCHEMA}"
+BRONZE_SCHEMA_FQN = f"{CATALOG}.{BRONZE_SCHEMA}"
+SILVER_SCHEMA_FQN = f"{CATALOG}.{SILVER_SCHEMA}"
+
+# Default schema the app reads from = Gold.
+SCHEMA = GOLD_SCHEMA
+SCHEMA_FQN = GOLD_SCHEMA_FQN
 
 # ----- Source data (read-only Unity Catalog tables, provided by the hackathon) -----
 # All three raw sources already exist as Unity Catalog tables; the Bronze layer reads
@@ -37,8 +46,9 @@ T_FACILITY_EQUIPMENT = f"{SCHEMA_FQN}.facility_equipment"
 T_FACILITY_CAPABILITY = f"{SCHEMA_FQN}.facility_capability"
 T_FACILITY_SOURCE = f"{SCHEMA_FQN}.facility_source"
 T_FACILITY_CONTACT = f"{SCHEMA_FQN}.facility_contact"
-T_PINCODE = f"{SCHEMA_FQN}.dim_pincode"
-T_DISTRICT_HEALTH = f"{SCHEMA_FQN}.dim_district_health"
+# dim_pincode / dim_district_health are Silver reference dimensions (Gold reads from them).
+T_PINCODE = f"{SILVER_SCHEMA_FQN}.dim_pincode"
+T_DISTRICT_HEALTH = f"{SILVER_SCHEMA_FQN}.dim_district_health"
 T_SPECIALTY = f"{SCHEMA_FQN}.dim_specialty"
 T_CARE_NEED = f"{SCHEMA_FQN}.dim_care_need"
 T_BRIDGE = f"{SCHEMA_FQN}.bridge_care_need_specialty"

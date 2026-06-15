@@ -28,7 +28,7 @@ SELECT
   f.data_quality_score, f.evidence_band, f.evidence_strength,
   h.institutional_birth_5y_pct, h.hh_health_insurance_pct, h.has_suppressed_values
 FROM {SCHEMA_FQN}.dim_facility f
-LEFT JOIN {SCHEMA_FQN}.dim_district_health h
+LEFT JOIN {SILVER_SCHEMA_FQN}.dim_district_health h
   ON f.pin_district = h.district_name AND f.state = h.state_ut
 ''')
 print('vw_facility_enriched created')
@@ -41,7 +41,7 @@ def resolve_location(query):
     '''Resolve a 6-digit pincode or a place name to (lat, lon, label).
     Tries dim_pincode first, then falls back to facility coordinates.'''
     q = str(query).strip().upper()
-    pin = spark.table(f'{SCHEMA_FQN}.dim_pincode')
+    pin = spark.table(f'{SILVER_SCHEMA_FQN}.dim_pincode')
 
     if q.isdigit() and len(q) == 6:
         r = pin.where(F.col('pincode') == q).agg(

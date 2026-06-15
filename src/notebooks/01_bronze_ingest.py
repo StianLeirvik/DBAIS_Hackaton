@@ -21,7 +21,7 @@
 fac = (spark.table(SOURCE_FACILITIES_TABLE)
        .withColumn('_source_table', F.lit(SOURCE_FACILITIES_TABLE))
        .withColumn('_ingest_ts', F.current_timestamp()))
-write_table(fac, 'bronze_facilities')
+write_table(fac, 'bronze_facilities', BRONZE_SCHEMA_FQN)
 
 # COMMAND ----------
 
@@ -29,7 +29,7 @@ write_table(fac, 'bronze_facilities')
 pincode = (spark.table(SOURCE_PINCODE_TABLE)
            .withColumn('_source_table', F.lit(SOURCE_PINCODE_TABLE))
            .withColumn('_ingest_ts', F.current_timestamp()))
-write_table(pincode, 'bronze_pincode')
+write_table(pincode, 'bronze_pincode', BRONZE_SCHEMA_FQN)
 
 # COMMAND ----------
 
@@ -37,9 +37,9 @@ write_table(pincode, 'bronze_pincode')
 nfhs = (spark.table(SOURCE_NFHS_TABLE)
         .withColumn('_source_table', F.lit(SOURCE_NFHS_TABLE))
         .withColumn('_ingest_ts', F.current_timestamp()))
-write_table(nfhs, 'bronze_nfhs')
+write_table(nfhs, 'bronze_nfhs', BRONZE_SCHEMA_FQN)
 
 # COMMAND ----------
 
 for t in ['bronze_facilities', 'bronze_pincode', 'bronze_nfhs']:
-    print(f'{t:20s}', spark.table(f'{SCHEMA_FQN}.{t}').count(), 'rows')
+    print(f'{t:20s}', spark.table(f'{BRONZE_SCHEMA_FQN}.{t}').count(), 'rows')

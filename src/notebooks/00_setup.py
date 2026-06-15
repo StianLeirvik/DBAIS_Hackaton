@@ -8,10 +8,21 @@
 
 # COMMAND ----------
 
-# ===== Catalog / schema =====
-CATALOG = 'workspace'                 # Free Edition default catalog
-SCHEMA  = 'referral_copilot'          # all bronze/silver/gold tables live here
-SCHEMA_FQN = f'{CATALOG}.{SCHEMA}'
+# ===== Catalog / per-layer schemas (databases) =====
+# Each medallion layer gets its OWN database (schema); Gold (serving) stays in the
+# current/project database. Cross-layer reads use the explicit *_SCHEMA_FQN below.
+CATALOG = 'workspace'                       # Free Edition default catalog
+GOLD_SCHEMA   = 'referral_copilot'          # Gold (serving) — the current project database
+BRONZE_SCHEMA = 'referral_copilot_bronze'   # Bronze (raw landing)
+SILVER_SCHEMA = 'referral_copilot_silver'   # Silver (cleaned / conformed)
+
+GOLD_SCHEMA_FQN   = f'{CATALOG}.{GOLD_SCHEMA}'
+BRONZE_SCHEMA_FQN = f'{CATALOG}.{BRONZE_SCHEMA}'
+SILVER_SCHEMA_FQN = f'{CATALOG}.{SILVER_SCHEMA}'
+
+# Default schema for write_table() and gold-to-gold reads.
+SCHEMA = GOLD_SCHEMA
+SCHEMA_FQN = GOLD_SCHEMA_FQN
 
 # ===== Source data (read-only Unity Catalog tables, provided by the hackathon) =====
 # All three raw sources already exist as UC tables; Bronze reads them directly.
@@ -104,11 +115,13 @@ def norm_text(c):
     '''Trim + upper-case for join keys.'''
     return F.upper(F.trim(c))
 
-def write_table(df, name, mode='overwrite'):
-    '''Write a managed Delta table into the project schema.'''
+def write_table(df, name, schema_fqn=None, mode='overwrite'):
+    '''Write a managed Delta table into `schema_fqn` (defaults to the Gold database).
+    Pass BRONZE_SCHEMA_FQN / SILVER_SCHEMA_FQN to land a table in another layer.'''
+    target = schema_fqn or GOLD_SCHEMA_FQN
     (df.write.mode(mode)
         .option('overwriteSchema', 'true')
-        .saveAsTable(f'{SCHEMA_FQN}.{name}'))
+        .saveAsTable(f'{target}.{name}'))
 
 # ----- Reliability tagging helpers -----
 _STOPWORDS = ['provides', 'provide', 'provided', 'offers', 'offer', 'offered', 'available',

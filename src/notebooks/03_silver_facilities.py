@@ -19,7 +19,7 @@
 
 # COMMAND ----------
 
-b = spark.table(f'{SCHEMA_FQN}.bronze_facilities')
+b = spark.table(f'{BRONZE_SCHEMA_FQN}.bronze_facilities')
 
 f = (b
      .withColumn('facility_id', F.col('unique_id'))
@@ -65,7 +65,7 @@ f = (f.withColumn('year_established', F.when(F.col('year_established').between(Y
 f = (f.withColumn('lat_raw', to_double(F.col('latitude')))
        .withColumn('lon_raw', to_double(F.col('longitude'))))
 
-p = (spark.table(f'{SCHEMA_FQN}.dim_pincode')
+p = (spark.table(f'{SILVER_SCHEMA_FQN}.dim_pincode')
      .select('pincode', 'centroid_lat', 'centroid_long',
              F.col('district').alias('pin_district'),
              F.col('state').alias('pin_state')))
@@ -94,12 +94,12 @@ silver = f.select(
     'official_website', 'official_phone', 'email', 'facebook_link', 'recency',
     'specialties_arr', 'procedure_arr', 'equipment_arr', 'capability_arr',
     'source_urls_arr', 'source_types_arr', 'source_ids_arr', 'phones_arr', 'websites_arr')
-write_table(silver, 'silver_facilities')
+write_table(silver, 'silver_facilities', SILVER_SCHEMA_FQN)
 
 # COMMAND ----------
 
 # quick data-quality read-out
-s = spark.table(f'{SCHEMA_FQN}.silver_facilities')
+s = spark.table(f'{SILVER_SCHEMA_FQN}.silver_facilities')
 print('rows:', s.count())
 s.groupBy('geo_source').count().show()
 s.select(F.round(F.avg(F.col('geo_is_valid').cast('int')), 3).alias('pct_geo_valid'),

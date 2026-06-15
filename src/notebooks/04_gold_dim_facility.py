@@ -16,7 +16,7 @@
 
 from pyspark.sql.window import Window
 
-s = spark.table(f'{SCHEMA_FQN}.silver_facilities')
+s = spark.table(f'{SILVER_SCHEMA_FQN}.silver_facilities')
 
 s = (s
      .withColumn('cluster_key', F.coalesce(F.col('cluster_id'), F.col('facility_id')))
