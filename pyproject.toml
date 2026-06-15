@@ -1,0 +1,82 @@
+# --------------------------------------------------------------------------------------
+# Project metadata + runtime dependencies (PEP 621) — what you need to RUN the pipeline
+# code against Databricks.
+#
+# NOTE: `databricks-connect` ships the full `pyspark` API, so do NOT also add a standalone
+# `pyspark` dependency — installing both in the same environment conflicts. Importing
+# `from pyspark.sql import functions as F` works with databricks-connect alone, which also
+# gives you a Spark session that executes on the Databricks (Free Edition) serverless compute.
+# --------------------------------------------------------------------------------------
+[project]
+name = "referral-copilot"
+version = "0.1.0"
+description = "Referral Copilot — evidence-attached, uncertainty-aware healthcare referral pipeline + Databricks App over the Virtue Foundation dataset."
+authors = [{ name = "DBAIS Hackathon Team" }]
+readme = "src/etl/README.md"
+requires-python = ">=3.11,<3.13"  # Databricks Apps run on 3.11; databricks-connect supports 3.11/3.12
+dependencies = [
+    "databricks-connect>=15.4,<16",  # remote Spark session against the workspace (bundles pyspark)
+    "databricks-sdk>=0.30,<1.0",     # workspace/catalog automation from Python
+]
+
+[tool.poetry]
+# This is a project (pipeline + Databricks App), not a packaged library, so there is
+# nothing to build/install as a wheel — Poetry is used purely for dependency management.
+package-mode = false
+
+# --------------------------------------------------------------------------------------
+# App group — the Referral Copilot Databricks App UI (location + need in, ranked
+# evidence-attached candidates out). Install with: poetry install --with app
+# --------------------------------------------------------------------------------------
+[tool.poetry.group.app.dependencies]
+streamlit = "^1.39"               # Databricks Apps UI framework
+databricks-sql-connector = "^3.4" # query the Gold Delta tables from the app
+pandas = "^2.2"                   # tabular results for the UI
+pydeck = "^0.9"                   # map of candidate facilities (distance / coordinates)
+
+# --------------------------------------------------------------------------------------
+# Dev group — linting, formatting, type-checking, tests, and running notebooks locally.
+# Install with: poetry install --with dev
+# --------------------------------------------------------------------------------------
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.6"                     # linter + formatter
+black = "^24.8"                   # opinionated formatter (matches ruff line length)
+mypy = "^1.11"                    # static type checking
+pytest = "^8.3"                   # tests
+ipykernel = "^6.29"              # run the .py notebooks interactively in VS Code / Jupyter
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
+
+# ======================================================================================
+# Tooling configuration
+# ======================================================================================
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["sample_data"]
+
+[tool.ruff.lint]
+# E/F = pyflakes+pycodestyle, I = isort, UP = pyupgrade, B = bugbear
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Databricks notebooks rely on runtime-injected globals (spark, dbutils, display) and the
+# helpers loaded via `%run ./00_setup` (F, write_table, clean_null, SOURCE_*_TABLE, ...).
+# These are undefined to a local linter, so silence "undefined name" + unused-import noise.
+"src/etl/notebooks/*.py" = ["F821", "F401", "E402"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true     # pyspark/databricks stubs are loose
+warn_unused_ignores = true
+exclude = "sample_data"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
