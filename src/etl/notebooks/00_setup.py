@@ -12,9 +12,9 @@
 # Each medallion layer gets its OWN database (schema); Gold (serving) stays in the
 # current/project database. Cross-layer reads use the explicit *_SCHEMA_FQN below.
 CATALOG = 'workspace'                       # Free Edition default catalog
-GOLD_SCHEMA   = 'referral_copilot'          # Gold (serving) — the current project database
-BRONZE_SCHEMA = 'referral_copilot_bronze'   # Bronze (raw landing)
-SILVER_SCHEMA = 'referral_copilot_silver'   # Silver (cleaned / conformed)
+GOLD_SCHEMA   = 'CareMap'                    # Gold (serving) — the current project database
+BRONZE_SCHEMA = 'CareMap_bronze'            # Bronze (raw landing)
+SILVER_SCHEMA = 'CareMap_silver'            # Silver (cleaned / conformed)
 
 GOLD_SCHEMA_FQN   = f'{CATALOG}.{GOLD_SCHEMA}'
 BRONZE_SCHEMA_FQN = f'{CATALOG}.{BRONZE_SCHEMA}'

@@ -55,8 +55,8 @@ The Bronze layer reads them directly with `spark.table(...)` — there is no CSV
 
 > The fully-qualified source names live in [config.py](config.py) (`SOURCE_*_TABLE`) and are
 > mirrored in `00_setup`. On Free Edition each medallion layer is written to its **own database**:
-> Bronze → `workspace.referral_copilot_bronze`, Silver → `workspace.referral_copilot_silver`,
-> Gold → `workspace.referral_copilot` (the project database). `00_setup` exposes
+> Bronze → `workspace.CareMap_bronze`, Silver → `workspace.CareMap_silver`,
+> Gold → `workspace.CareMap` (the project database). `00_setup` exposes
 > `BRONZE_SCHEMA_FQN`, `SILVER_SCHEMA_FQN`, `GOLD_SCHEMA_FQN`, and `write_table(df, name, schema_fqn)`
 > routes each table to its layer.
 

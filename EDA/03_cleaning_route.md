@@ -2,8 +2,8 @@
 
 Bronze → Silver → Gold on Databricks Free Edition (Delta tables / Unity Catalog).
 
-**Each layer is its own database (schema):** Bronze → `workspace.referral_copilot_bronze`,
-Silver → `workspace.referral_copilot_silver`, Gold → `workspace.referral_copilot` (the
+**Each layer is its own database (schema):** Bronze → `workspace.CareMap_bronze`,
+Silver → `workspace.CareMap_silver`, Gold → `workspace.CareMap` (the
 project database, kept as the serving layer). `00_setup` exposes `BRONZE_SCHEMA_FQN`,
 `SILVER_SCHEMA_FQN`, `GOLD_SCHEMA_FQN`; `write_table(df, name, schema_fqn)` routes each
 table to its layer and Gold reads cross-layer from Silver where needed.

@@ -8,9 +8,9 @@ can be loaded with ``%run ./00_setup`` without importing this module.
 # ----- Catalog / per-layer schemas (databases) -----
 # Each medallion layer has its OWN database; Gold (serving) stays in the project database.
 CATALOG = "workspace"                        # Free Edition default catalog
-GOLD_SCHEMA = "referral_copilot"             # Gold (serving) — the project database
-BRONZE_SCHEMA = "referral_copilot_bronze"    # Bronze (raw landing)
-SILVER_SCHEMA = "referral_copilot_silver"    # Silver (cleaned / conformed)
+GOLD_SCHEMA = "CareMap"                       # Gold (serving) — the project database
+BRONZE_SCHEMA = "CareMap_bronze"             # Bronze (raw landing)
+SILVER_SCHEMA = "CareMap_silver"             # Silver (cleaned / conformed)
 GOLD_SCHEMA_FQN = f"{CATALOG}.{GOLD_SCHEMA}"
 BRONZE_SCHEMA_FQN = f"{CATALOG}.{BRONZE_SCHEMA}"
 SILVER_SCHEMA_FQN = f"{CATALOG}.{SILVER_SCHEMA}"
