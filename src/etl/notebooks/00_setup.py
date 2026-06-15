@@ -54,10 +54,11 @@ print('Config loaded for', SCHEMA_FQN)
 
 # COMMAND ----------
 
-# Create the project schema. Raw data is read directly from the provided UC tables,
-# so no volume or CSV-upload step is required.
-spark.sql(f'CREATE SCHEMA IF NOT EXISTS {SCHEMA_FQN}') # pylint: disable=E0602 # defined in dbruntime
-print('Schema ready:', SCHEMA_FQN)
+# Create all three per-layer schemas (databases). Raw data is read directly from the
+# provided UC tables, so no volume or CSV-upload step is required.
+for _sfqn in (BRONZE_SCHEMA_FQN, SILVER_SCHEMA_FQN, GOLD_SCHEMA_FQN):
+    spark.sql(f'CREATE SCHEMA IF NOT EXISTS {_sfqn}') # pylint: disable=E0602 # defined in dbruntime
+    print('Schema ready:', _sfqn)
 
 # COMMAND ----------
 
