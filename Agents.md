@@ -40,3 +40,13 @@ All records include facility name, state, city, latitude, longitude, controlled 
 Useful evidence appears across description, capability, procedure, equipment, specialties, and source_urls. Teams should treat these fields as claims to verify rather than ground truth.
 
 There is sample data for the saw data in sample_data/raw_data/*.csv
+
+
+# What we are creating:
+
+##  Referral Copilot
+Question: Where should a patient or coordinator actually go?
+
+Build an app where a user enters a location and a care need, such as "dialysis near Jaipur" or "emergency surgery near Patna," and receives an evidence-attached shortlist of candidate facilities.
+
+Minimum workflow: location and need in; ranked candidates out; each candidate shows distance, matching evidence, missing or suspicious evidence, and can be saved to a shortlist.
