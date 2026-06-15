@@ -22,15 +22,37 @@ const emit = defineEmits<{
 const mapEl = ref<HTMLDivElement | null>(null)
 let map: L.Map | null = null
 
+// Persistent marker references — so we can update styles without rebuilding
+const markerRefs = new Map<string, L.CircleMarker>()
+let prevSelectedId: string | null = null
+
 function scoreColor(score: number): { fill: string; stroke: string } {
   if (score >= 65) return { fill: '#0f7d6b', stroke: '#0a5c4e' }
   if (score >= 35) return { fill: '#b2790f', stroke: '#8a5e0c' }
   return { fill: '#cf4a26', stroke: '#a33b1e' }
 }
 
+function markerOpts(f: ScoredFacility, selected: boolean): L.CircleMarkerOptions {
+  const { fill, stroke } = scoreColor(f.overallScore)
+  return selected
+    ? { radius: 16, color: '#16233f', fillColor: fill, fillOpacity: 0.95, weight: 3 }
+    : { radius: 6,  color: stroke,    fillColor: fill, fillOpacity: 0.45, weight: 1 }
+}
+
+function popupHtml(f: ScoredFacility) {
+  return (
+    `<div style="min-width:150px"><strong>${f.name_clean}</strong><br>` +
+    `<span style="color:#666;font-size:12px">${f.city ?? ''}, ${f.state ?? ''}</span><br>` +
+    `<span style="font-size:12px">Score: <strong>${f.overallScore}</strong></span></div>`
+  )
+}
+
 function buildMap() {
   if (!mapEl.value || map) return
+  markerRefs.clear()
+  prevSelectedId = null
 
+  const selId    = props.selected?.facility_id ?? null
   const centerLat = props.userLat ?? 20.5937
   const centerLng = props.userLng ?? 78.9629
 
@@ -46,88 +68,99 @@ function buildMap() {
   if (props.userLat != null && props.userLng != null) {
     L.circle([props.userLat, props.userLng], {
       radius: 200_000,
-      color: '#16233f',
-      fillColor: '#16233f',
-      fillOpacity: 0.04,
-      weight: 1.5,
-      dashArray: '6 4',
+      color: '#16233f', fillColor: '#16233f', fillOpacity: 0.04,
+      weight: 1.5, dashArray: '6 4',
     }).addTo(map)
 
     L.circleMarker([props.userLat, props.userLng], {
-      radius: 7,
-      color: '#fff',
-      fillColor: '#16233f',
-      fillOpacity: 1,
-      weight: 2,
+      radius: 7, color: '#fff', fillColor: '#16233f', fillOpacity: 1, weight: 2,
     })
       .bindTooltip(props.locationLabel || 'Search location', { direction: 'top' })
       .addTo(map)
   }
 
-  // Non-selected facilities drawn first (dimmer, smaller)
+  // All facility markers (dimmed first, selected on top via z-index)
   for (const f of props.facilities) {
     if (f.latitude_clean == null || f.longitude_clean == null) continue
-    if (f.facility_id === props.selected?.facility_id) continue
-    const { fill, stroke } = scoreColor(f.overallScore)
-    L.circleMarker([f.latitude_clean, f.longitude_clean], {
-      radius: 6,
-      color: stroke,
-      fillColor: fill,
-      fillOpacity: 0.45,
-      weight: 1,
-    })
-      .bindPopup(
-        `<div style="min-width:150px"><strong>${f.name_clean}</strong><br>` +
-        `<span style="color:#666;font-size:12px">${f.city ?? ''}, ${f.state ?? ''}</span><br>` +
-        `<span style="font-size:12px">Score: <strong>${f.overallScore}</strong></span></div>`,
-      )
+    const isSel = f.facility_id === selId
+    const marker = L.circleMarker([f.latitude_clean, f.longitude_clean], markerOpts(f, isSel))
+      .bindPopup(popupHtml(f))
       .on('click', () => emit('select', f.facility_id))
       .addTo(map!)
+    if (isSel) {
+      marker.bindTooltip(String(f.overallScore), {
+        permanent: true, direction: 'center', className: 'map-score-label',
+      })
+    }
+    markerRefs.set(f.facility_id, marker)
   }
 
-  // Selected facility on top (larger, opaque, score label)
+  // Fly to selected facility on open
   const sel = props.selected
-  const selLat = sel?.latitude_clean
-  const selLng = sel?.longitude_clean
-  if (sel != null && selLat != null && selLng != null) {
-    const { fill, stroke } = scoreColor(sel.overallScore)
-    L.circleMarker([selLat, selLng], {
-      radius: 18,
-      color: '#16233f',
-      fillColor: fill,
-      fillOpacity: 0.95,
-      weight: 3,
-    })
-      .bindTooltip(String(sel.overallScore), {
-        permanent: true,
-        direction: 'center',
-        className: 'map-score-label',
-      })
-      .bindPopup(
-        `<div style="min-width:150px"><strong>${sel.name_clean}</strong><br>` +
-        `<span style="color:#666;font-size:12px">${sel.city ?? ''}, ${sel.state ?? ''}</span><br>` +
-        `<span style="font-size:12px">Score: <strong>${sel.overallScore}</strong></span></div>`,
-      )
-      .addTo(map!)
-    // suppress unused-var warning
-    void stroke
+  if (sel?.latitude_clean != null && sel?.longitude_clean != null) {
+    map.flyTo([sel.latitude_clean, sel.longitude_clean], 13, { animate: true, duration: 1.0 })
   }
+
+  prevSelectedId = selId
+}
+
+// Update marker styles + fly to without rebuilding the map
+function updateSelection(newId: string | null) {
+  if (!map) return
+
+  // Reset old selected marker
+  if (prevSelectedId) {
+    const m = markerRefs.get(prevSelectedId)
+    const f = props.facilities.find(x => x.facility_id === prevSelectedId)
+    if (m && f) {
+      m.setStyle(markerOpts(f, false))
+      m.unbindTooltip()
+    }
+  }
+
+  // Apply new selected marker
+  if (newId) {
+    const m = markerRefs.get(newId)
+    const f = props.facilities.find(x => x.facility_id === newId)
+    if (m && f) {
+      m.setStyle(markerOpts(f, true))
+      m.bindTooltip(String(f.overallScore), {
+        permanent: true, direction: 'center', className: 'map-score-label',
+      })
+      if (f.latitude_clean != null && f.longitude_clean != null) {
+        map.flyTo([f.latitude_clean, f.longitude_clean], 13, { animate: true, duration: 0.8 })
+      }
+    }
+  }
+
+  prevSelectedId = newId
 }
 
 function teardown() {
   if (map) { map.remove(); map = null }
+  markerRefs.clear()
+  prevSelectedId = null
 }
 
-// Rebuild whenever the modal opens or the selected facility changes while open
+// Build once on open, teardown on close
 watch(
-  () => [props.open, props.selected?.facility_id] as const,
-  async ([open]) => {
-    teardown()
+  () => props.open,
+  async (open) => {
     if (open) {
       await nextTick()
       buildMap()
       map?.invalidateSize()
+    } else {
+      teardown()
     }
+  },
+)
+
+// Selection changes while map is open: update imperatively (no rebuild)
+watch(
+  () => props.selected?.facility_id,
+  (newId) => {
+    if (props.open && map) updateSelection(newId ?? null)
   },
 )
 
@@ -145,7 +178,7 @@ onUnmounted(teardown)
       >
         <div
           class="rounded-2xl overflow-hidden flex flex-col"
-          style="width:min(520px,95vw);max-height:90vh;background:white;box-shadow:0 24px 64px rgba(0,0,0,0.28)"
+          style="width:min(680px,97vw);max-height:92vh;background:white;box-shadow:0 24px 64px rgba(0,0,0,0.28)"
         >
           <!-- Header -->
           <div class="px-5 py-4 flex items-start gap-3" style="border-bottom:1px solid var(--line)">
@@ -199,7 +232,7 @@ onUnmounted(teardown)
           </div>
 
           <!-- Map -->
-          <div ref="mapEl" style="height:400px;flex:0 0 400px" />
+          <div ref="mapEl" style="height:480px;flex:0 0 480px" />
 
           <!-- Footer note -->
           <div

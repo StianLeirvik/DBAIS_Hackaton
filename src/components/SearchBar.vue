@@ -28,7 +28,7 @@ const emit = defineEmits<{
           :value="props.careNeedId"
           class="border rounded-lg px-3 py-2 text-sm font-medium outline-none"
           style="border-color:var(--line);background:white;color:var(--ink);min-width:180px"
-          @change="emit('update:careNeedId', ($event.target as HTMLSelectElement).value)"
+          @change="emit('update:careNeedId', ($event.target as HTMLSelectElement).value); if (props.location.trim()) emit('search')"
         >
           <option v-for="need in CARE_NEEDS" :key="need.id" :value="need.id">
             {{ need.icon }} {{ need.label }}
@@ -77,7 +77,7 @@ const emit = defineEmits<{
         :style="props.careNeedId === need.id
           ? 'background:var(--ink);color:white;border-color:var(--ink)'
           : 'background:white;color:var(--ink-soft);border-color:var(--line)'"
-        @click="emit('update:careNeedId', need.id)"
+        @click="emit('update:careNeedId', need.id); if (props.location.trim()) emit('search')"
       >
         {{ need.icon }} {{ need.label }}
       </button>

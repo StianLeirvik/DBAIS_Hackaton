@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Bookmark } from '@lucide/vue'
 import SearchBar from './components/SearchBar.vue'
 import CandidateCard from './components/CandidateCard.vue'
@@ -51,6 +51,13 @@ function handleSearch() {
   selectedId.value = null
   search()
 }
+
+// Auto-select the top result once results load
+watch(sortedResults, (results) => {
+  if (results.length > 0 && selectedId.value === null) {
+    selectedId.value = results[0].facility_id
+  }
+})
 </script>
 
 <template>
@@ -101,13 +108,6 @@ function handleSearch() {
         <span class="font-bold" style="color:var(--ink)">{{ orderedResults.length }} candidates</span>
         · ranked by match strength · record confidence shown separately, never blended in
       </span>
-      <button
-        class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-        style="background:var(--ink);color:white"
-        @click="mapOpen = true"
-      >
-        ◈ Map
-      </button>
     </div>
 
     <!-- ─── Welcome state (full-width, centered) ──────────────────────────── -->
@@ -176,7 +176,6 @@ function handleSearch() {
         </template>
       </div>
 
-      <!-- Right: detail panel -->
       <div v-if="selectedFacility" class="flex-1 sticky top-[104px]">
         <DetailPanel
           :facility="selectedFacility"
@@ -186,12 +185,8 @@ function handleSearch() {
           @toggle-verify="toggleVerify(selectedFacility!.facility_id)"
           @toggle-dismiss="toggleDismiss(selectedFacility!.facility_id)"
           @save-note="(n) => setNote(selectedFacility!.facility_id, n)"
+          @view-map="viewFacilityMap(selectedFacility!.facility_id)"
         />
-      </div>
-      <div v-else-if="!loading && orderedResults.length > 0"
-           class="flex-1 sticky top-[104px] flex items-center justify-center h-72 rounded-2xl"
-           style="border:2px dashed var(--line);color:var(--ink-soft)">
-        <p class="text-sm">Select a candidate to see its full record</p>
       </div>
 
     </div>

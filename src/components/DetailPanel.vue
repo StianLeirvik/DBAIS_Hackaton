@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Check, Phone, PhoneCall, Bookmark, Pencil } from '@lucide/vue'
+import { Check, Phone, PhoneCall, Bookmark, Pencil, Map } from '@lucide/vue'
 import type { ScoredFacility, ConfidenceLevel } from '../types'
 import EvidenceItem from './EvidenceItem.vue'
 
@@ -22,6 +22,7 @@ const emit = defineEmits<{
   (e: 'toggle-verify'): void
   (e: 'toggle-dismiss'): void
   (e: 'save-note', note: string): void
+  (e: 'view-map'): void
 }>()
 
 const TODAY = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -84,14 +85,24 @@ const phone = computed(() => props.facility.phone)
           <template v-else>{{ part }}</template>
         </span>
       </div>
-      <a
-        v-if="phone"
-        :href="`tel:${phone}`"
-        class="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-lg"
-        style="background:var(--teal-tint);color:var(--teal)"
-      >
-        <Phone :size="12" /> {{ phone }}
-      </a>
+      <div class="flex items-center gap-2 flex-wrap">
+        <a
+          v-if="phone"
+          :href="`tel:${phone}`"
+          class="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-lg"
+          style="background:var(--teal-tint);color:var(--teal)"
+        >
+          <Phone :size="12" /> {{ phone }}
+        </a>
+        <button
+          v-if="facility.latitude_clean != null"
+          class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+          style="background:#eef1f7;color:var(--ink);border:1px solid #d4daea"
+          @click="emit('view-map')"
+        >
+          <Map :size="12" /> View on map
+        </button>
+      </div>
     </div>
 
     <!-- Phone-verified banner -->

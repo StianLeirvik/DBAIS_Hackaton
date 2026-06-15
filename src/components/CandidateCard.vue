@@ -56,10 +56,10 @@ const distLabel = computed(() => {
 
 <template>
   <article
-    class="rounded-xl cursor-pointer transition-all select-none"
-    style="background:white;border:1px solid var(--line)"
+    class="rounded-xl cursor-pointer select-none"
+    style="background:white;border:2px solid transparent;transition:border-color 0.15s,box-shadow 0.15s"
     :style="[
-      selected ? { border: '2px solid var(--ink)', boxShadow: '0 2px 12px rgba(22,35,63,0.12)' } : {},
+      selected ? { borderColor: 'var(--ink)', boxShadow: '0 2px 12px rgba(22,35,63,0.12)' } : { borderColor: 'var(--line)' },
       session.dismissed ? { opacity: 0.45 } : {},
     ]"
     @click="emit('select')"
@@ -102,11 +102,11 @@ const distLabel = computed(() => {
 
       <!-- Map button -->
       <button
-        class="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-lg transition-colors"
-        style="color:var(--ink-soft);background:var(--grey-tint)"
+        class="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors ml-1"
+        style="color:var(--ink);background:#eef1f7;border:1px solid #d4daea"
         @click.stop="emit('view-map')"
       >
-        <Map :size="11" /> Map
+        <Map :size="12" /> View on map
       </button>
 
       <!-- Evidence dots -->
