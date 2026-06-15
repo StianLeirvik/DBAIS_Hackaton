@@ -176,7 +176,46 @@ watch(sortedResults, (results) => {
         </template>
       </div>
 
-      <div v-if="selectedFacility" class="flex-1 sticky top-[104px]">
+      <!-- Right: detail panel skeleton while loading -->
+      <div v-if="loading" class="flex-1 sticky top-[104px]">
+        <div class="rounded-2xl overflow-hidden" style="background:white;border:1px solid var(--line)">
+          <!-- Head skeleton -->
+          <div class="px-5 pt-5 pb-4" style="border-bottom:1px solid var(--line)">
+            <div class="h-7 rounded animate-pulse mb-3" style="background:#e8eaed;width:68%" />
+            <div class="flex gap-3 mb-3">
+              <div class="h-3 w-16 rounded animate-pulse" style="background:#f1f3f4" />
+              <div class="h-3 w-12 rounded animate-pulse" style="background:#f1f3f4" />
+              <div class="h-3 w-20 rounded animate-pulse" style="background:#f1f3f4" />
+              <div class="h-3 w-14 rounded animate-pulse" style="background:#f1f3f4" />
+            </div>
+            <div class="h-8 w-36 rounded-lg animate-pulse" style="background:#f1f3f4" />
+          </div>
+          <!-- Stat grid skeleton -->
+          <div class="grid grid-cols-2 gap-4 px-5 py-4" style="border-bottom:1px solid var(--line)">
+            <div class="rounded-xl p-4 animate-pulse" style="background:#f6f7f9">
+              <div class="h-3 w-24 rounded mb-3" style="background:#e2e6ef" />
+              <div class="h-10 w-14 rounded mb-2" style="background:#e2e6ef" />
+              <div class="h-3 w-32 rounded" style="background:#eaecf0" />
+            </div>
+            <div class="rounded-xl p-4 animate-pulse" style="background:#f6f7f9">
+              <div class="h-3 w-24 rounded mb-3" style="background:#e2e6ef" />
+              <div class="h-7 w-20 rounded-full mb-2" style="background:#e2e6ef" />
+              <div class="h-3 w-36 rounded" style="background:#eaecf0" />
+            </div>
+          </div>
+          <!-- Evidence sections skeleton -->
+          <div class="px-5 py-4 space-y-5">
+            <div v-for="s in 3" :key="s">
+              <div class="h-3 w-28 rounded animate-pulse mb-3" style="background:#e2e6ef" />
+              <div class="space-y-2">
+                <div v-for="r in 3" :key="r" class="h-8 rounded-lg animate-pulse" style="background:#f1f3f4" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="selectedFacility" class="flex-1 sticky top-[104px]">
         <DetailPanel
           :facility="selectedFacility"
           :session="getSession(selectedFacility.facility_id)"
