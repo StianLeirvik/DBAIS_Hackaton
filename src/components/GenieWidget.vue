@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { X, MessageSquare, Minimize2, Sparkles } from '@lucide/vue'
+import { X, Minimize2, Sparkles } from '@lucide/vue'
 
 const GENIE_URL =
   'https://dbc-4b429529-04fe.cloud.databricks.com/embed/genie/rooms/01f16905c1d512708c595d8850bcd076?o=7474645297699468'
