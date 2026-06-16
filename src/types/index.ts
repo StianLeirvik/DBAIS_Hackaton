@@ -71,11 +71,12 @@ export interface ScoredFacility extends FacilityRow {
   phone: string | null
   email: string | null
   website: string | null
-  // Scores (0–100)
-  overallScore: number
-  capabilityScore: number
-  proximityScore: number
-  riskPenalty: number
+  // Score components
+  overallScore: number     // 0–90
+  capabilityScore: number  // 0–45
+  proximityScore: number   // 0–30
+  freshnessScore: number   // 0–15
+  riskPenalty: number      // subtracted from sum
   distanceKm: number | null
   // Confidence
   confLevel: ConfidenceLevel

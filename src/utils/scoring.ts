@@ -1,44 +1,71 @@
 import { haversineKm } from './distance'
 import type { FacilityRow, ScoredFacility, CareNeedDef, Evidence, ConfidenceLevel } from '../types'
 
-// ---------------------------------------------------------------------------
-// Proximity scoring (0–100)
-// ---------------------------------------------------------------------------
-
-function scoreProximity(distanceKm: number | null): number {
-  if (distanceKm === null) return 0
-  return Math.max(0, Math.round((1 - distanceKm / 200) * 100))
-}
+// Maximum search radius used for linear proximity decay
+const MAX_KM = 300
 
 // ---------------------------------------------------------------------------
-// Capability scoring using structured evidence tables (0–100)
+// capability_pts = round(45 * (0.6·specialty_match + 0.4·keyword_strength))
+// specialty_match  = fraction of keywords matched in any specialty display_name
+// keyword_strength = total weighted hits / (keywords.length * max_weight), ≤ 1
 // ---------------------------------------------------------------------------
-
-function scoreCapability(row: FacilityRow, careNeed: CareNeedDef): number {
-  const specialties = row.specialties ?? []
-  const procedures = row.procedures ?? []
-  const equipment = row.equipment ?? []
+function capabilityPts(row: FacilityRow, careNeed: CareNeedDef): number {
+  const specialties  = row.specialties  ?? []
+  const procedures   = row.procedures   ?? []
+  const equipment    = row.equipment    ?? []
   const capabilities = row.capabilities ?? []
+  const kwds = careNeed.keywords
 
-  let score = 0
-  for (const kw of careNeed.keywords) {
+  // specialty_match: fraction of keywords that hit at least one specialty
+  const specHits = kwds.filter(kw =>
+    specialties.some(s => s.display_name.toLowerCase().includes(kw))
+  ).length
+  const specialtyMatch = kwds.length > 0 ? specHits / kwds.length : 0
+
+  // keyword_strength: weighted evidence hits, normalised
+  // max weight per keyword per source type: 1.0 (spec) + 0.8 (proc) + 0.8 (equip) + 0.4 (cap) = 3.0
+  const MAX_WEIGHT_PER_KW = 3.0
+  let totalHits = 0
+  for (const kw of kwds) {
     const kwl = kw.toLowerCase()
     const spec = specialties.find(s => s.display_name.toLowerCase().includes(kwl))
-    if (spec) score += spec.confidence
+    if (spec) totalHits += 1.0
 
     const proc = procedures.find(p =>
       (p.text?.toLowerCase() ?? '').includes(kwl) || (p.tag?.toLowerCase() ?? '').includes(kwl))
-    if (proc) score += proc.is_reliable ? proc.confidence : proc.confidence * 0.4
+    if (proc) totalHits += proc.is_reliable ? 0.8 : 0.3
 
     const equip = equipment.find(e =>
       (e.text?.toLowerCase() ?? '').includes(kwl) || (e.tag?.toLowerCase() ?? '').includes(kwl))
-    if (equip) score += equip.is_reliable ? equip.confidence : equip.confidence * 0.4
+    if (equip) totalHits += equip.is_reliable ? 0.8 : 0.3
 
     const cap = capabilities.find(c => (c.text?.toLowerCase() ?? '').includes(kwl))
-    if (cap) score += cap.is_reliable ? cap.confidence * 0.6 : cap.confidence * 0.2
+    if (cap) totalHits += cap.is_reliable ? 0.4 : 0.15
   }
+  const keywordStrength = kwds.length > 0
+    ? Math.min(1, totalHits / (kwds.length * MAX_WEIGHT_PER_KW))
+    : 0
 
-  return Math.min(100, Math.round((score / Math.max(1, careNeed.keywords.length * 0.6)) * 100))
+  return Math.round(45 * (0.6 * specialtyMatch + 0.4 * keywordStrength))
+}
+
+// ---------------------------------------------------------------------------
+// proximity_pts = round(30 * max(0, 1 - distance_km / MAX_KM))  — linear decay
+// ---------------------------------------------------------------------------
+function proximityPts(distanceKm: number | null): number {
+  if (distanceKm === null) return 0
+  return Math.round(30 * Math.max(0, 1 - distanceKm / MAX_KM))
+}
+
+// ---------------------------------------------------------------------------
+// freshness_pts = round(15 * recency_score)
+// Derived from evidence_band (proxy for data recency/quality)
+// ---------------------------------------------------------------------------
+function freshnessPts(row: FacilityRow): number {
+  const recency =
+    row.evidence_band === 'High' ? 1.0 :
+    row.evidence_band === 'Med'  ? 0.65 : 0.3
+  return Math.round(15 * recency)
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +201,8 @@ function generateEvidence(
 
 // ---------------------------------------------------------------------------
 // Main scoring function
+// match_score = capabilityPts + proximityPts + freshnessPts - riskPenalty
+// risk_penalty: red flags (coral) = −8 pts each, yellow (amber) = −3 pts each
 // ---------------------------------------------------------------------------
 
 export function scoreFacility(
@@ -188,15 +217,16 @@ export function scoreFacility(
     distanceKm = haversineKm(userLat, userLng, row.latitude_clean, row.longitude_clean)
   }
 
-  const capabilityScore = scoreCapability(row, careNeed)
-  const proximityScore  = scoreProximity(distanceKm)
+  const capabilityScore = capabilityPts(row, careNeed)
+  const proximityScore  = proximityPts(distanceKm)
+  const freshnessScore  = freshnessPts(row)
 
   const { green: greenEvidence, amber: amberEvidence, coral: coralEvidence, grey: greyEvidence } =
     generateEvidence(row, careNeed)
 
-  const riskPenalty  = coralEvidence.length * 5
-  const overallScore = Math.max(0, Math.min(100,
-    Math.round(capabilityScore * 0.6 + proximityScore * 0.4) - riskPenalty))
+  const riskPenalty  = coralEvidence.length * 8 + amberEvidence.length * 3
+  const overallScore = Math.max(0, Math.min(90,
+    capabilityScore + proximityScore + freshnessScore - riskPenalty))
 
   const { level: confLevel, reason: confReason } = computeConfidence(row)
   const pinOk = isPinOk(row.pincode)
@@ -209,7 +239,7 @@ export function scoreFacility(
   return {
     ...row,
     phone, email, website,
-    overallScore, capabilityScore, proximityScore, riskPenalty, distanceKm,
+    overallScore, capabilityScore, proximityScore, freshnessScore, riskPenalty, distanceKm,
     confLevel, confReason, pinOk,
     greenEvidence, amberEvidence, coralEvidence, greyEvidence,
     dotGreen: greenEvidence.length,

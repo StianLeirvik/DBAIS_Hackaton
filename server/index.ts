@@ -109,9 +109,19 @@ function normalizeStarRow(row: Record<string, unknown>): Record<string, unknown>
   const capabilities = pgArr(row.capability_arr).filter(t => t.length > 2)
     .map(text => ({ text, tag: null, confidence: 0.7, ...UNVERIFIED }))
 
-  const sourceUrls  = pgArr(row.source_urls_arr)
-  const sourceTypes = pgArr(row.source_types_arr)
-  const sources = sourceUrls.map((url, i) => ({ url, is_official: sourceTypes[i] === 'official' }))
+  // Sources come from the facility_source JOIN (_src_urls / _src_officials arrays).
+  // Falls back to source_urls_arr (denormalized column) if the join returned nothing.
+  const joinedUrls     = pgArr(row._src_urls)
+  const joinedOfficials = Array.isArray(row._src_officials)
+    ? (row._src_officials as unknown[]).map(v => v === true || v === 't' || v === 'true')
+    : []
+  let sources: { url: string; is_official: boolean }[]
+  if (joinedUrls.length > 0) {
+    sources = joinedUrls.map((url, i) => ({ url, is_official: joinedOfficials[i] ?? false }))
+  } else {
+    // Fallback: denormalized array, no official info available
+    sources = pgArr(row.source_urls_arr).map(url => ({ url, is_official: false }))
+  }
 
   return {
     facility_id:        row.facility_id,
@@ -263,11 +273,15 @@ app.get('/api/facilities/search', async (req, res) => {
     }
 
     // ── dim_facility path (wide denormalized table) ────────────────────────
+    // Correlated subqueries fetch facility_source rows without needing GROUP BY.
     const result = await pool.query(
-      `SELECT *
+      `SELECT f.*,
+              (SELECT array_agg(fs.source_url)  FROM ${DB_SCHEMA}.facility_source fs WHERE fs.facility_id = f.facility_id AND fs.source_url IS NOT NULL) AS _src_urls,
+              (SELECT array_agg(fs.is_official) FROM ${DB_SCHEMA}.facility_source fs WHERE fs.facility_id = f.facility_id AND fs.source_url IS NOT NULL) AS _src_officials
        FROM ${DB_SCHEMA}.dim_facility f
-       WHERE LOWER(f.city)  LIKE LOWER($1)
-          OR LOWER(f.state) LIKE LOWER($1)
+       WHERE LOWER(f.city)         LIKE LOWER($1)
+          OR LOWER(f.state)        LIKE LOWER($1)
+          OR LOWER(f.pin_district) LIKE LOWER($1)
           OR f.pincode = $2
        LIMIT $3`,
       [likeParam, location, limit],
@@ -276,6 +290,88 @@ app.get('/api/facilities/search', async (req, res) => {
   } catch (err) {
     console.error('[/api/facilities/search]', err)
     res.status(500).json({ error: String(err) })
+  }
+})
+
+/**
+ * Geocode a city / district name to lat/lng using MEDIAN coordinates.
+ *
+ * Tier 1: dim_pincode — median of postal centroid_lat/centroid_long per district
+ *         (165k records, purpose-built geo reference, outlier-resistant).
+ * Tier 2: dim_facility — median of facility coords where city matches exactly.
+ * Tier 3: dim_facility — median where pin_district matches exactly.
+ * Tier 4: dim_facility — LIKE fallback on city/pin_district.
+ *
+ * GET /api/geocode-city?q=Jaipur
+ */
+app.get('/api/geocode-city', async (req, res) => {
+  const q = String(req.query.q ?? '').trim()
+  if (!q) { res.json(null); return }
+  try {
+    const pool     = await getPool()
+    const strategy = await detectSchemaStrategy()
+    if (strategy !== 'star') { res.json(null); return }
+
+    // Helper: get the median value from an ordered array at the middle index.
+    // Uses OFFSET n/2 LIMIT 1 which works on all PostgreSQL-compatible engines.
+    async function medianGeo(
+      table: string,
+      latCol: string,
+      lngCol: string,
+      whereClause: string,
+      params: string[],
+    ): Promise<{ lat: number; lng: number } | null> {
+      const countRes = await pool.query<{ cnt: number }>(
+        `SELECT COUNT(*) AS cnt FROM ${DB_SCHEMA}.${table}
+         WHERE ${latCol} IS NOT NULL AND ${lngCol} IS NOT NULL AND (${whereClause})`,
+        params,
+      )
+      const cnt = Number(countRes.rows[0]?.cnt ?? 0)
+      if (cnt < 3) return null
+      const mid = Math.floor(cnt / 2)
+
+      const latRes = await pool.query<{ v: number }>(
+        `SELECT ${latCol} AS v FROM ${DB_SCHEMA}.${table}
+         WHERE ${latCol} IS NOT NULL AND ${lngCol} IS NOT NULL AND (${whereClause})
+         ORDER BY ${latCol} OFFSET ${mid} LIMIT 1`,
+        params,
+      )
+      const lngRes = await pool.query<{ v: number }>(
+        `SELECT ${lngCol} AS v FROM ${DB_SCHEMA}.${table}
+         WHERE ${latCol} IS NOT NULL AND ${lngCol} IS NOT NULL AND (${whereClause})
+         ORDER BY ${lngCol} OFFSET ${mid} LIMIT 1`,
+        params,
+      )
+      const lat = Number(latRes.rows[0]?.v)
+      const lng = Number(lngRes.rows[0]?.v)
+      if (isNaN(lat) || isNaN(lng)) return null
+      return { lat, lng }
+    }
+
+    // ── Tier 1: dim_pincode district centroid (purpose-built geo reference) ──
+    const t1 = await medianGeo(
+      'dim_pincode', 'centroid_lat', 'centroid_long',
+      `LOWER(district) = LOWER($1)`, [q],
+    )
+    if (t1) { res.json(t1); return }
+
+    // ── Tier 2+: dim_facility median coordinates ──
+    const tiers: [string, string[]][] = [
+      [`LOWER(city) = LOWER($1) AND geo_is_valid = true`, [q]],
+      [`LOWER(pin_district) = LOWER($1) AND geo_is_valid = true`, [q]],
+      [`(LOWER(city) LIKE LOWER($1) OR LOWER(pin_district) LIKE LOWER($1)) AND geo_is_valid = true`, [`%${q}%`]],
+    ]
+
+    for (const [condition, params] of tiers) {
+      const result = await medianGeo(
+        'dim_facility', 'latitude_clean', 'longitude_clean',
+        condition, params,
+      )
+      if (result) { res.json(result); return }
+    }
+    res.json(null)
+  } catch {
+    res.json(null)
   }
 })
 

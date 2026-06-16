@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Check, Phone, PhoneCall, Bookmark, Pencil, Map } from '@lucide/vue'
+import { Check, Phone, PhoneCall, Bookmark, Pencil, Map, ExternalLink, ShieldCheck } from '@lucide/vue'
 import type { ScoredFacility, ConfidenceLevel } from '../types'
 import EvidenceItem from './EvidenceItem.vue'
 
@@ -61,6 +61,10 @@ const metaParts = computed(() => {
   return parts
 })
 
+const sortedSources = computed(() =>
+  [...(props.facility.sources ?? [])].sort((a, b) => (b.is_official ? 1 : 0) - (a.is_official ? 1 : 0))
+)
+
 const phone = computed(() => props.facility.phone)
 </script>
 
@@ -119,22 +123,30 @@ const phone = computed(() => props.facility.phone)
       <div class="rounded-xl p-4" style="background:var(--grey-tint)">
         <div class="text-[11px] font-semibold tracking-wide uppercase mb-2" style="color:var(--ink-soft)">Match Strength</div>
         <div class="font-serif font-bold text-4xl leading-none mb-1" style="color:var(--ink)">{{ facility.overallScore }}</div>
-        <div class="text-xs mb-3" style="color:var(--ink-soft)">Capability evidence, cited below. Proximity is illustrative.</div>
+        <div class="text-xs mb-3" style="color:var(--ink-soft)">Capability + proximity + freshness, minus risk deductions. Max 90.</div>
         <button class="text-xs font-medium" style="color:var(--teal)" @click="showBreakdown = !showBreakdown">
           {{ showBreakdown ? 'Hide breakdown' : 'Show breakdown' }}
         </button>
         <div v-if="showBreakdown" class="mt-3 space-y-1.5">
           <div class="flex justify-between text-xs">
-            <span style="color:var(--ink-soft)">Capability match (45%)</span>
+            <span style="color:var(--ink-soft)">Capability match (max 45)</span>
             <span class="font-semibold font-mono" style="color:var(--ink)">{{ facility.capabilityScore }}</span>
           </div>
           <div class="flex justify-between text-xs">
-            <span style="color:var(--ink-soft)">Travel proximity (30%)</span>
-            <span class="font-semibold" style="color:var(--amber)">illustrative</span>
+            <span style="color:var(--ink-soft)">Travel proximity (max 30)</span>
+            <span class="font-semibold font-mono" style="color:var(--ink)">{{ facility.proximityScore }}</span>
+          </div>
+          <div class="flex justify-between text-xs">
+            <span style="color:var(--ink-soft)">Data freshness (max 15)</span>
+            <span class="font-semibold font-mono" style="color:var(--ink)">{{ facility.freshnessScore }}</span>
+          </div>
+          <div class="flex justify-between text-xs" style="color:var(--coral)">
+            <span>Risk deductions</span>
+            <span class="font-semibold font-mono">−{{ facility.riskPenalty }}</span>
           </div>
           <div class="flex justify-between text-xs pt-1.5" style="border-top:1px solid var(--line)">
-            <span style="color:var(--ink)">Shown match</span>
-            <span class="font-semibold font-mono" style="color:var(--ink)">{{ facility.overallScore }}</span>
+            <span style="color:var(--ink)">Match score</span>
+            <span class="font-semibold font-mono" style="color:var(--ink)">{{ facility.overallScore }} / 90</span>
           </div>
         </div>
       </div>
@@ -247,6 +259,36 @@ const phone = computed(() => props.facility.phone)
         <div v-if="phone" class="mt-3 text-xs px-3 py-2 rounded-lg" style="background:var(--grey-tint);color:var(--ink-soft)">
           Facility number on record: <span class="font-mono font-medium" style="color:var(--ink)">{{ phone }}</span>
         </div>
+      </div>
+    </div>
+
+    <!-- Sources -->
+    <div v-if="facility.sources && facility.sources.length > 0" class="px-5 pb-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wide" style="color:var(--ink-soft)">Sources</span>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <a
+          v-for="(src, i) in sortedSources"
+          :key="i"
+          :href="src.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          :title="src.is_official ? 'Official source — verified as belonging to this facility' : src.url"
+          class="flex items-center gap-2 text-xs px-3 py-2 rounded-lg group transition-colors"
+          :style="src.is_official
+            ? 'background:var(--teal-tint);color:var(--teal)'
+            : 'background:var(--grey-tint);color:var(--ink-soft)'"
+        >
+          <ShieldCheck v-if="src.is_official" :size="13" class="shrink-0" style="color:var(--teal)" />
+          <ExternalLink v-else :size="12" class="shrink-0 opacity-50" />
+          <span class="flex-1 truncate font-mono" style="font-size:10px">{{ src.url }}</span>
+          <span
+            v-if="src.is_official"
+            class="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded"
+            style="background:rgba(15,125,107,0.15);color:var(--teal)"
+          >OFFICIAL</span>
+        </a>
       </div>
     </div>
 

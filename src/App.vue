@@ -79,12 +79,6 @@ watch(sortedResults, (results) => {
       </button>
     </header>
 
-    <!-- ─── Honesty ribbon ────────────────────────────────────────────────── -->
-    <div class="px-5 py-2.5 text-xs font-medium" style="background:#fffbeb;color:#78350f;border-bottom:1px solid #fde68a">
-      <span class="font-bold">Honesty note:</span>
-      Scores are derived from catalog records only — not real-time data. Distances are illustrative (straight-line, not travel time). Always confirm service availability by phone before referral.
-    </div>
-
     <!-- ─── Search area ────────────────────────────────────────────────────── -->
     <div class="px-5 pt-5 pb-4" style="border-bottom:1px solid var(--line)">
       <SearchBar

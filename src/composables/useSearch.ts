@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { searchFacilities, geocodePincode } from '../api/facilities'
+import { searchFacilities, geocodePincode, geocodeCity } from '../api/facilities'
 import { scoreFacility, sortFacilities } from '../utils/scoring'
 import type { ScoredFacility, SortBy } from '../types'
 import { getCareNeed } from '../types'
@@ -39,25 +39,26 @@ export function useSearch() {
       let userLat: number | null = null
       let userLng: number | null = null
 
-      // Try pincode geocoding if input is numeric
+      // 1. PIN code → pincode directory (most precise)
       if (/^\d{5,6}$/.test(loc)) {
         const geo = await geocodePincode(loc).catch(() => null)
-        if (geo) {
-          userLat = geo.lat
-          userLng = geo.lng
-        }
+        if (geo) { userLat = geo.lat; userLng = geo.lng }
       }
 
-      // Fallback: average coordinates of found facilities
+      // 2. Free-text → geocode against dim_facility city/district/state averages
+      if (userLat === null) {
+        const geo = await geocodeCity(loc).catch(() => null)
+        if (geo) { userLat = geo.lat; userLng = geo.lng }
+      }
+
+      // 3. Last resort: centroid of returned facilities
       if (userLat === null) {
         const lats: number[] = []
         const lngs: number[] = []
         for (const row of rows.slice(0, 50)) {
-          const lat = row.latitude_clean
-          const lng = row.longitude_clean
-          if (lat != null && lng != null) {
-            lats.push(lat)
-            lngs.push(lng)
+          if (row.latitude_clean != null && row.longitude_clean != null) {
+            lats.push(row.latitude_clean)
+            lngs.push(row.longitude_clean)
           }
         }
         if (lats.length > 0) {

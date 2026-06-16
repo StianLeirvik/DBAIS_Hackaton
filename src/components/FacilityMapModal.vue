@@ -64,10 +64,10 @@ function buildMap() {
     maxZoom: 19,
   }).addTo(map)
 
-  // Illustrative search-area ring
+  // Search-area ring — radius matches the 300 km proximity scoring horizon
   if (props.userLat != null && props.userLng != null) {
     L.circle([props.userLat, props.userLng], {
-      radius: 200_000,
+      radius: 300_000,
       color: '#16233f', fillColor: '#16233f', fillOpacity: 0.04,
       weight: 1.5, dashArray: '6 4',
     }).addTo(map)

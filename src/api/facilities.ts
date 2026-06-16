@@ -20,3 +20,11 @@ export async function geocodePincode(
   if (!res.ok) return null
   return (await res.json()) as { lat: number; lng: number } | null
 }
+
+export async function geocodeCity(
+  q: string,
+): Promise<{ lat: number; lng: number } | null> {
+  const res = await fetch(`/api/geocode-city?q=${encodeURIComponent(q)}`)
+  if (!res.ok) return null
+  return (await res.json()) as { lat: number; lng: number } | null
+}
